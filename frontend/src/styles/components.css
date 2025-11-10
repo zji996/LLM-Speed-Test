@@ -1,0 +1,244 @@
+/* Card styles */
+.card {
+  @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700;
+}
+
+.card-header {
+  @apply px-6 py-4 border-b border-gray-200 dark:border-gray-700;
+}
+
+.card-title {
+  @apply text-lg font-semibold text-gray-900 dark:text-white;
+}
+
+.card-content {
+  @apply p-6;
+}
+
+.card-footer {
+  @apply px-6 py-4 border-t border-gray-200 dark:border-gray-700;
+}
+
+/* Button styles */
+.btn {
+  @apply inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ring-offset-white dark:ring-offset-gray-900;
+}
+
+.btn-primary {
+  @apply btn bg-primary-600 text-white hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600;
+}
+
+.btn-secondary {
+  @apply btn bg-secondary-100 text-secondary-900 hover:bg-secondary-200 dark:bg-secondary-800 dark:text-secondary-100 dark:hover:bg-secondary-700;
+}
+
+.btn-success {
+  @apply btn bg-success-600 text-white hover:bg-success-700 dark:bg-success-500 dark:hover:bg-success-600;
+}
+
+.btn-warning {
+  @apply btn bg-warning-500 text-white hover:bg-warning-600 dark:bg-warning-400 dark:hover:bg-warning-500;
+}
+
+.btn-error {
+  @apply btn bg-error-600 text-white hover:bg-error-700 dark:bg-error-500 dark:hover:bg-error-600;
+}
+
+/* Input styles */
+.input {
+  @apply flex h-10 w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-gray-500 dark:placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+.select {
+  @apply flex h-10 w-full items-center justify-between rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm ring-offset-white placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+.textarea {
+  @apply flex min-h-[80px] w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm ring-offset-white placeholder:text-gray-500 dark:placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+/* Form styles */
+.form-group {
+  @apply space-y-2;
+}
+
+.form-label {
+  @apply block text-sm font-medium text-gray-700 dark:text-gray-300;
+}
+
+.form-input {
+  @apply input;
+}
+
+.form-select {
+  @apply select;
+}
+
+.form-textarea {
+  @apply textarea;
+}
+
+.form-error {
+  @apply text-sm text-error-600 dark:text-error-400;
+}
+
+.form-help {
+  @apply text-sm text-gray-500 dark:text-gray-400;
+}
+
+/* Status indicators */
+.status-indicator {
+  @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+}
+
+.status-success {
+  @apply status-indicator bg-success-100 text-success-800 dark:bg-success-900 dark:text-success-200;
+}
+
+.status-error {
+  @apply status-indicator bg-error-100 text-error-800 dark:bg-error-900 dark:text-error-200;
+}
+
+.status-warning {
+  @apply status-indicator bg-warning-100 text-warning-800 dark:bg-warning-900 dark:text-warning-200;
+}
+
+.status-info {
+  @apply status-indicator bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200;
+}
+
+.status-running {
+  @apply status-indicator bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200;
+}
+
+/* Metric cards */
+.metric-card {
+  @apply card p-6;
+}
+
+.metric-title {
+  @apply text-sm font-medium text-gray-500 dark:text-gray-400;
+}
+
+.metric-value {
+  @apply mt-2 text-3xl font-bold text-gray-900 dark:text-white;
+}
+
+.metric-change {
+  @apply mt-2 flex items-center text-sm;
+}
+
+.metric-change-positive {
+  @apply metric-change text-success-600 dark:text-success-400;
+}
+
+.metric-change-negative {
+  @apply metric-change text-error-600 dark:text-error-400;
+}
+
+/* Chart containers */
+.chart-container {
+  @apply card p-6;
+}
+
+.chart-title {
+  @apply text-lg font-semibold text-gray-900 dark:text-white mb-4;
+}
+
+.chart-legend {
+  @apply flex items-center justify-center space-x-4 mt-4;
+}
+
+.chart-legend-item {
+  @apply flex items-center space-x-2;
+}
+
+.chart-legend-color {
+  @apply w-3 h-3 rounded-full;
+}
+
+.chart-legend-label {
+  @apply text-sm text-gray-600 dark:text-gray-400;
+}
+
+/* Loading states */
+.loading-spinner {
+  @apply animate-spin h-5 w-5 text-primary-600 dark:text-primary-400;
+}
+
+.loading-dots {
+  @apply flex space-x-1;
+}
+
+.loading-dot {
+  @apply w-2 h-2 bg-primary-600 dark:bg-primary-400 rounded-full animate-bounce;
+}
+
+.loading-dot:nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.loading-dot:nth-child(3) {
+  animation-delay: 0.2s;
+}
+
+/* Empty states */
+.empty-state {
+  @apply text-center py-12;
+}
+
+.empty-state-icon {
+  @apply mx-auto h-12 w-12 text-gray-400 dark:text-gray-600;
+}
+
+.empty-state-title {
+  @apply mt-4 text-sm font-medium text-gray-900 dark:text-white;
+}
+
+.empty-state-description {
+  @apply mt-2 text-sm text-gray-500 dark:text-gray-400;
+}
+
+/* Custom utilities for charts */
+.chart-bar {
+  @apply transition-all duration-300 ease-out;
+}
+
+.chart-line {
+  @apply transition-all duration-300 ease-out;
+}
+
+.chart-point {
+  @apply transition-all duration-200 ease-out;
+}
+
+.chart-area {
+  @apply transition-all duration-300 ease-out;
+}
+
+/* Responsive utilities */
+@media (max-width: 640px) {
+  .responsive-table {
+    @apply block overflow-x-auto;
+  }
+
+  .responsive-table table {
+    @apply min-w-full;
+  }
+
+  .responsive-grid {
+    @apply grid-cols-1;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 768px) {
+  .responsive-grid {
+    @apply grid-cols-2;
+  }
+}
+
+@media (min-width: 769px) {
+  .responsive-grid {
+    @apply grid-cols-3;
+  }
+}

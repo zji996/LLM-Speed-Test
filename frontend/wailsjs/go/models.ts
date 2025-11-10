@@ -1,0 +1,267 @@
+export namespace main {
+	
+	export class ComparisonSummary {
+	    bestLatencyBatchId: string;
+	    bestThroughputBatchId: string;
+	    bestTokensPerSecBatchId: string;
+	    lowestErrorRateBatchId: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ComparisonSummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.bestLatencyBatchId = source["bestLatencyBatchId"];
+	        this.bestThroughputBatchId = source["bestThroughputBatchId"];
+	        this.bestTokensPerSecBatchId = source["bestTokensPerSecBatchId"];
+	        this.lowestErrorRateBatchId = source["lowestErrorRateBatchId"];
+	    }
+	}
+	export class TestSummary {
+	    totalTests: number;
+	    successfulTests: number;
+	    failedTests: number;
+	    averageLatency: number;
+	    minLatency: number;
+	    maxLatency: number;
+	    averageTokensPerSecond: number;
+	    minTokensPerSecond: number;
+	    maxTokensPerSecond: number;
+	    averageThroughput: number;
+	    minThroughput: number;
+	    maxThroughput: number;
+	    errorRate: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TestSummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.totalTests = source["totalTests"];
+	        this.successfulTests = source["successfulTests"];
+	        this.failedTests = source["failedTests"];
+	        this.averageLatency = source["averageLatency"];
+	        this.minLatency = source["minLatency"];
+	        this.maxLatency = source["maxLatency"];
+	        this.averageTokensPerSecond = source["averageTokensPerSecond"];
+	        this.minTokensPerSecond = source["minTokensPerSecond"];
+	        this.maxTokensPerSecond = source["maxTokensPerSecond"];
+	        this.averageThroughput = source["averageThroughput"];
+	        this.minThroughput = source["minThroughput"];
+	        this.maxThroughput = source["maxThroughput"];
+	        this.errorRate = source["errorRate"];
+	    }
+	}
+	export class TestResult {
+	    id: string;
+	    timestamp: string;
+	    configuration: TestConfiguration;
+	    promptTokens: number;
+	    completionTokens: number;
+	    totalTokens: number;
+	    requestLatency: number;
+	    totalLatency: number;
+	    tokensPerSecond: number;
+	    throughput: number;
+	    error?: string;
+	    success: boolean;
+	    response?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TestResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.timestamp = source["timestamp"];
+	        this.configuration = this.convertValues(source["configuration"], TestConfiguration);
+	        this.promptTokens = source["promptTokens"];
+	        this.completionTokens = source["completionTokens"];
+	        this.totalTokens = source["totalTokens"];
+	        this.requestLatency = source["requestLatency"];
+	        this.totalLatency = source["totalLatency"];
+	        this.tokensPerSecond = source["tokensPerSecond"];
+	        this.throughput = source["throughput"];
+	        this.error = source["error"];
+	        this.success = source["success"];
+	        this.response = source["response"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class TestConfiguration {
+	    apiEndpoint: string;
+	    apiKey: string;
+	    model: string;
+	    promptType: string;
+	    promptLength: number;
+	    prompt: string;
+	    maxTokens: number;
+	    temperature: number;
+	    topP: number;
+	    presencePenalty: number;
+	    frequencyPenalty: number;
+	    testCount: number;
+	    concurrentTests: number;
+	    timeout: number;
+	    headers?: Record<string, string>;
+	
+	    static createFrom(source: any = {}) {
+	        return new TestConfiguration(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.apiEndpoint = source["apiEndpoint"];
+	        this.apiKey = source["apiKey"];
+	        this.model = source["model"];
+	        this.promptType = source["promptType"];
+	        this.promptLength = source["promptLength"];
+	        this.prompt = source["prompt"];
+	        this.maxTokens = source["maxTokens"];
+	        this.temperature = source["temperature"];
+	        this.topP = source["topP"];
+	        this.presencePenalty = source["presencePenalty"];
+	        this.frequencyPenalty = source["frequencyPenalty"];
+	        this.testCount = source["testCount"];
+	        this.concurrentTests = source["concurrentTests"];
+	        this.timeout = source["timeout"];
+	        this.headers = source["headers"];
+	    }
+	}
+	export class TestBatch {
+	    id: string;
+	    startTime: string;
+	    endTime: string;
+	    configuration: TestConfiguration;
+	    results: TestResult[];
+	    summary: TestSummary;
+	
+	    static createFrom(source: any = {}) {
+	        return new TestBatch(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.startTime = source["startTime"];
+	        this.endTime = source["endTime"];
+	        this.configuration = this.convertValues(source["configuration"], TestConfiguration);
+	        this.results = this.convertValues(source["results"], TestResult);
+	        this.summary = this.convertValues(source["summary"], TestSummary);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ComparisonResult {
+	    batches: TestBatch[];
+	    comparison: ComparisonSummary;
+	
+	    static createFrom(source: any = {}) {
+	        return new ComparisonResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.batches = this.convertValues(source["batches"], TestBatch);
+	        this.comparison = this.convertValues(source["comparison"], ComparisonSummary);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class ExportOptions {
+	    includeCharts: boolean;
+	    chartTypes?: string[];
+	    dateFormat?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExportOptions(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.includeCharts = source["includeCharts"];
+	        this.chartTypes = source["chartTypes"];
+	        this.dateFormat = source["dateFormat"];
+	    }
+	}
+	export class ProgressUpdate {
+	    testId: string;
+	    batchId: string;
+	    testNumber: number;
+	    totalTests: number;
+	    status: string;
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProgressUpdate(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.testId = source["testId"];
+	        this.batchId = source["batchId"];
+	        this.testNumber = source["testNumber"];
+	        this.totalTests = source["totalTests"];
+	        this.status = source["status"];
+	        this.message = source["message"];
+	    }
+	}
+	
+	
+	
+
+}
+
