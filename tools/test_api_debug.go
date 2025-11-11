@@ -12,7 +12,7 @@ func main() {
 	endpoint := "http://192.168.8.12:8000/v1"
 	apiKey := "nWubQHWkkf1gCQxQJe"
 
-	fmt.Println("=== Testing API Connection ===\n")
+	fmt.Println("=== Testing API Connection ===")
 	fmt.Printf("Endpoint: %s\n", endpoint)
 	fmt.Printf("API Key: %s (length: %d)\n\n", apiKey, len(apiKey))
 
@@ -91,5 +91,6 @@ func main() {
 		}
 	}
 
-	fmt.Println("\n=== Test Complete ===")
+	fmt.Println()
+	fmt.Println("=== Test Complete ===")
 }

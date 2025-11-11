@@ -64,10 +64,13 @@ func (s *ExportService) exportCSV(batch TestBatch, options ExportOptions) (strin
 		"Timestamp",
 		"Status",
 		"Total Latency (ms)",
-		"Request Latency (ms)",
+		"Time To First Token (ms)",
+		"Output Time (ms)",
 		"Prompt Tokens",
 		"Completion Tokens",
 		"Total Tokens",
+		"Prefill Tokens Per Second",
+		"Output Tokens Per Second",
 		"Tokens Per Second",
 		"Throughput",
 		"Error",
@@ -83,11 +86,14 @@ func (s *ExportService) exportCSV(batch TestBatch, options ExportOptions) (strin
 			result.ID,
 			result.Timestamp,
 			map[bool]string{true: "Success", false: "Failed"}[result.Success],
-			fmt.Sprintf("%.2f", result.TotalLatency.Seconds()*1000),
-			fmt.Sprintf("%.2f", result.RequestLatency.Seconds()*1000),
+			fmt.Sprintf("%.2f", result.TotalLatency),
+			fmt.Sprintf("%.2f", result.RequestLatency),
+			fmt.Sprintf("%.2f", result.OutputLatency),
 			strconv.Itoa(result.PromptTokens),
 			strconv.Itoa(result.CompletionTokens),
 			strconv.Itoa(result.TotalTokens),
+			fmt.Sprintf("%.2f", result.PrefillTokensPerSecond),
+			fmt.Sprintf("%.2f", result.OutputTokensPerSecond),
 			fmt.Sprintf("%.2f", result.TokensPerSecond),
 			fmt.Sprintf("%.2f", result.Throughput),
 			result.Error,
@@ -107,14 +113,30 @@ func (s *ExportService) exportCSV(batch TestBatch, options ExportOptions) (strin
 	writer.Write([]string{"Error Rate", fmt.Sprintf("%.2f%%", batch.Summary.ErrorRate*100)})
 	writer.Write([]string{})
 	writer.Write([]string{"LATENCY STATISTICS (ms)"})
-	writer.Write([]string{"Average", fmt.Sprintf("%.2f", batch.Summary.AverageLatency.Seconds()*1000)})
-	writer.Write([]string{"Minimum", fmt.Sprintf("%.2f", batch.Summary.MinLatency.Seconds()*1000)})
-	writer.Write([]string{"Maximum", fmt.Sprintf("%.2f", batch.Summary.MaxLatency.Seconds()*1000)})
+	writer.Write([]string{"Average (Total)", fmt.Sprintf("%.2f", batch.Summary.AverageLatency)})
+	writer.Write([]string{"Minimum (Total)", fmt.Sprintf("%.2f", batch.Summary.MinLatency)})
+	writer.Write([]string{"Maximum (Total)", fmt.Sprintf("%.2f", batch.Summary.MaxLatency)})
+	writer.Write([]string{"Average (Prefill)", fmt.Sprintf("%.2f", batch.Summary.AveragePrefillLatency)})
+	writer.Write([]string{"Minimum (Prefill)", fmt.Sprintf("%.2f", batch.Summary.MinPrefillLatency)})
+	writer.Write([]string{"Maximum (Prefill)", fmt.Sprintf("%.2f", batch.Summary.MaxPrefillLatency)})
+	writer.Write([]string{"Average (Output)", fmt.Sprintf("%.2f", batch.Summary.AverageOutputLatency)})
+	writer.Write([]string{"Minimum (Output)", fmt.Sprintf("%.2f", batch.Summary.MinOutputLatency)})
+	writer.Write([]string{"Maximum (Output)", fmt.Sprintf("%.2f", batch.Summary.MaxOutputLatency)})
 	writer.Write([]string{})
 	writer.Write([]string{"THROUGHPUT STATISTICS (tokens/second)"})
 	writer.Write([]string{"Average", fmt.Sprintf("%.2f", batch.Summary.AverageThroughput)})
 	writer.Write([]string{"Minimum", fmt.Sprintf("%.2f", batch.Summary.MinThroughput)})
 	writer.Write([]string{"Maximum", fmt.Sprintf("%.2f", batch.Summary.MaxThroughput)})
+	writer.Write([]string{})
+	writer.Write([]string{"PREFILL TOKENS/SEC"})
+	writer.Write([]string{"Average", fmt.Sprintf("%.2f", batch.Summary.AveragePrefillTokensPerSecond)})
+	writer.Write([]string{"Minimum", fmt.Sprintf("%.2f", batch.Summary.MinPrefillTokensPerSecond)})
+	writer.Write([]string{"Maximum", fmt.Sprintf("%.2f", batch.Summary.MaxPrefillTokensPerSecond)})
+	writer.Write([]string{})
+	writer.Write([]string{"OUTPUT TOKENS/SEC"})
+	writer.Write([]string{"Average", fmt.Sprintf("%.2f", batch.Summary.AverageOutputTokensPerSecond)})
+	writer.Write([]string{"Minimum", fmt.Sprintf("%.2f", batch.Summary.MinOutputTokensPerSecond)})
+	writer.Write([]string{"Maximum", fmt.Sprintf("%.2f", batch.Summary.MaxOutputTokensPerSecond)})
 
 	return filepath, nil
 }
@@ -187,7 +209,7 @@ func (s *ExportService) exportCharts(batch TestBatch, options ExportOptions) (st
 	fmt.Fprintf(file, "Test#,Latency\n")
 	for i, result := range batch.Results {
 		if result.Success {
-			fmt.Fprintf(file, "%d,%.2f\n", i+1, result.TotalLatency.Seconds()*1000)
+			fmt.Fprintf(file, "%d,%.2f\n", i+1, result.TotalLatency)
 		}
 	}
 
@@ -272,9 +294,9 @@ func (s *ExportService) exportComparisonCSV(comparison ComparisonResult, filepat
 			strconv.Itoa(batch.Summary.TotalTests),
 			strconv.Itoa(batch.Summary.SuccessfulTests),
 			fmt.Sprintf("%.2f", batch.Summary.ErrorRate*100),
-			fmt.Sprintf("%.2f", batch.Summary.AverageLatency.Seconds()*1000),
-			fmt.Sprintf("%.2f", batch.Summary.MinLatency.Seconds()*1000),
-			fmt.Sprintf("%.2f", batch.Summary.MaxLatency.Seconds()*1000),
+			fmt.Sprintf("%.2f", batch.Summary.AverageLatency),
+			fmt.Sprintf("%.2f", batch.Summary.MinLatency),
+			fmt.Sprintf("%.2f", batch.Summary.MaxLatency),
 			fmt.Sprintf("%.2f", batch.Summary.AverageThroughput),
 			fmt.Sprintf("%.2f", batch.Summary.MinThroughput),
 			fmt.Sprintf("%.2f", batch.Summary.MaxThroughput),

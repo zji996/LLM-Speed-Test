@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"sync"
 	"time"
@@ -131,24 +132,46 @@ func (s *SpeedTestService) runIndividualTest(config TestConfiguration, testNumbe
 		TopP:             config.TopP,
 		PresencePenalty:  config.PresencePenalty,
 		FrequencyPenalty: config.FrequencyPenalty,
-		Stream:           false,
+		Stream:           true,
+		StreamOptions: &StreamOptions{
+			IncludeUsage: true,
+		},
 	}
 
 	// Execute request
 	startTime := time.Now()
 	response, latency, err := client.GenerateCompletion(request, config.Headers)
+	if err != nil && request.Stream {
+		log.Printf("Streaming completion failed, retrying without stream: %v", err)
+		request.Stream = false
+		request.StreamOptions = nil
+		response, latency, err = client.GenerateCompletion(request, config.Headers)
+	}
 	totalLatency := time.Since(startTime)
+	totalLatencyMs := float64(totalLatency) / float64(time.Millisecond)
+	if totalLatencyMs < 0 {
+		totalLatencyMs = 0
+	}
+	requestLatencyMs := float64(latency) / float64(time.Millisecond)
+	if requestLatencyMs < 0 {
+		requestLatencyMs = 0
+	}
+	if requestLatencyMs > totalLatencyMs {
+		requestLatencyMs = totalLatencyMs
+	}
+	outputLatencyMs := totalLatencyMs - requestLatencyMs
+
+	result.TotalLatency = totalLatencyMs
+	result.RequestLatency = requestLatencyMs
+	result.OutputLatency = outputLatencyMs
 
 	if err != nil {
 		result.Error = err.Error()
-		result.TotalLatency = totalLatency
 		return result
 	}
 
 	// Calculate metrics
 	result.Success = true
-	result.RequestLatency = latency
-	result.TotalLatency = totalLatency
 	result.PromptTokens = response.Usage.PromptTokens
 	result.CompletionTokens = response.Usage.CompletionTokens
 	result.TotalTokens = response.Usage.TotalTokens
@@ -157,13 +180,82 @@ func (s *SpeedTestService) runIndividualTest(config TestConfiguration, testNumbe
 		result.Response = response.Choices[0].Message.Content
 	}
 
-	// Calculate tokens per second and throughput
-	if result.TotalTokens > 0 && totalLatency.Seconds() > 0 {
-		result.TokensPerSecond = float64(result.TotalTokens) / totalLatency.Seconds()
-		result.Throughput = result.TokensPerSecond
+	if outputLatencyMs <= 0 && (result.PromptTokens > 0 || result.CompletionTokens > 0) {
+		prefillMs, outputMs := splitLatencyByTokens(totalLatencyMs, result.PromptTokens, result.CompletionTokens)
+		result.RequestLatency = prefillMs
+		result.OutputLatency = outputMs
+		requestLatencyMs = prefillMs
+		outputLatencyMs = outputMs
 	}
 
+	result.PrefillTokensPerSecond = computeTokensPerSecond(result.PromptTokens, requestLatencyMs)
+
+	// Output latency might be zero for very small generations - fall back to total latency to avoid division by zero
+	outputLatencyForCalc := outputLatencyMs
+	if outputLatencyForCalc <= 0 {
+		outputLatencyForCalc = totalLatencyMs
+	}
+
+	result.OutputTokensPerSecond = computeTokensPerSecond(result.CompletionTokens, outputLatencyForCalc)
+
+	totalLatencySeconds := totalLatencyMs / 1000
+	if result.TotalTokens > 0 && totalLatencySeconds > 0 {
+		result.TokensPerSecond = float64(result.TotalTokens) / totalLatencySeconds
+	}
+
+	// Throughput focuses on decode speed to align with third-party tooling
+	result.Throughput = result.OutputTokensPerSecond
+
 	return result
+}
+
+func computeTokensPerSecond(tokens int, durationMs float64) float64 {
+	if tokens <= 0 || durationMs <= 0 {
+		return 0
+	}
+	return float64(tokens) / (durationMs / 1000.0)
+}
+
+func splitLatencyByTokens(totalLatencyMs float64, promptTokens, completionTokens int) (float64, float64) {
+	if totalLatencyMs <= 0 {
+		return 0, 0
+	}
+
+	totalTokens := promptTokens + completionTokens
+	if totalTokens <= 0 {
+		return totalLatencyMs, 0
+	}
+
+	if completionTokens <= 0 {
+		return totalLatencyMs, 0
+	}
+
+	if promptTokens <= 0 {
+		return 0, totalLatencyMs
+	}
+
+	promptRatio := float64(promptTokens) / float64(totalTokens)
+	const minSegmentRatio = 0.02
+
+	if promptRatio < minSegmentRatio {
+		promptRatio = minSegmentRatio
+	} else if promptRatio > 1-minSegmentRatio {
+		promptRatio = 1 - minSegmentRatio
+	}
+
+	prefill := totalLatencyMs * promptRatio
+	output := totalLatencyMs - prefill
+
+	if prefill <= 0 {
+		prefill = totalLatencyMs * minSegmentRatio
+		output = totalLatencyMs - prefill
+	}
+	if output <= 0 {
+		output = totalLatencyMs * minSegmentRatio
+		prefill = totalLatencyMs - output
+	}
+
+	return prefill, output
 }
 
 // calculateSummary calculates summary statistics for a batch of results
@@ -176,25 +268,58 @@ func (s *SpeedTestService) calculateSummary(results []TestResult) TestSummary {
 		TotalTests: len(results),
 	}
 
-	var totalLatency time.Duration
-	var totalTokensPerSecond, totalThroughput float64
-	var minLatency, maxLatency time.Duration = time.Hour, 0
-	var minTokensPerSecond, maxTokensPerSecond = math.MaxFloat64, 0.0
-	var minThroughput, maxThroughput = math.MaxFloat64, 0.0
+	var totalLatency float64
+	var totalPrefillLatency float64
+	var totalOutputLatency float64
+	var totalTokensPerSecond float64
+	var totalPrefillTokensPerSecond float64
+	var totalOutputTokensPerSecond float64
+	var totalThroughput float64
+
+	minLatency := math.MaxFloat64
+	maxLatency := 0.0
+	minPrefillLatency := math.MaxFloat64
+	maxPrefillLatency := 0.0
+	minOutputLatency := math.MaxFloat64
+	maxOutputLatency := 0.0
+	minTokensPerSecond := math.MaxFloat64
+	maxTokensPerSecond := 0.0
+	minPrefillTokensPerSecond := math.MaxFloat64
+	maxPrefillTokensPerSecond := 0.0
+	minOutputTokensPerSecond := math.MaxFloat64
+	maxOutputTokensPerSecond := 0.0
+	minThroughput := math.MaxFloat64
+	maxThroughput := 0.0
+
+	validPrefillTPS := 0
+	validOutputTPS := 0
 
 	for _, result := range results {
 		if result.Success {
 			summary.SuccessfulTests++
 			totalLatency += result.TotalLatency
+			totalPrefillLatency += result.RequestLatency
+			totalOutputLatency += result.OutputLatency
 			totalTokensPerSecond += result.TokensPerSecond
 			totalThroughput += result.Throughput
 
-			// Update min/max values
 			if result.TotalLatency < minLatency {
 				minLatency = result.TotalLatency
 			}
 			if result.TotalLatency > maxLatency {
 				maxLatency = result.TotalLatency
+			}
+			if result.RequestLatency < minPrefillLatency {
+				minPrefillLatency = result.RequestLatency
+			}
+			if result.RequestLatency > maxPrefillLatency {
+				maxPrefillLatency = result.RequestLatency
+			}
+			if result.OutputLatency < minOutputLatency {
+				minOutputLatency = result.OutputLatency
+			}
+			if result.OutputLatency > maxOutputLatency {
+				maxOutputLatency = result.OutputLatency
 			}
 			if result.TokensPerSecond < minTokensPerSecond {
 				minTokensPerSecond = result.TokensPerSecond
@@ -208,21 +333,63 @@ func (s *SpeedTestService) calculateSummary(results []TestResult) TestSummary {
 			if result.Throughput > maxThroughput {
 				maxThroughput = result.Throughput
 			}
+
+			if result.PrefillTokensPerSecond > 0 {
+				totalPrefillTokensPerSecond += result.PrefillTokensPerSecond
+				validPrefillTPS++
+				if result.PrefillTokensPerSecond < minPrefillTokensPerSecond {
+					minPrefillTokensPerSecond = result.PrefillTokensPerSecond
+				}
+				if result.PrefillTokensPerSecond > maxPrefillTokensPerSecond {
+					maxPrefillTokensPerSecond = result.PrefillTokensPerSecond
+				}
+			}
+
+			if result.OutputTokensPerSecond > 0 {
+				totalOutputTokensPerSecond += result.OutputTokensPerSecond
+				validOutputTPS++
+				if result.OutputTokensPerSecond < minOutputTokensPerSecond {
+					minOutputTokensPerSecond = result.OutputTokensPerSecond
+				}
+				if result.OutputTokensPerSecond > maxOutputTokensPerSecond {
+					maxOutputTokensPerSecond = result.OutputTokensPerSecond
+				}
+			}
 		} else {
 			summary.FailedTests++
 		}
 	}
 
 	if summary.SuccessfulTests > 0 {
-		summary.AverageLatency = totalLatency / time.Duration(summary.SuccessfulTests)
+		count := float64(summary.SuccessfulTests)
+		summary.AverageLatency = totalLatency / count
 		summary.MinLatency = minLatency
 		summary.MaxLatency = maxLatency
-		summary.AverageTokensPerSecond = totalTokensPerSecond / float64(summary.SuccessfulTests)
+		summary.AveragePrefillLatency = totalPrefillLatency / count
+		summary.MinPrefillLatency = minPrefillLatency
+		summary.MaxPrefillLatency = maxPrefillLatency
+		summary.AverageOutputLatency = totalOutputLatency / count
+		summary.MinOutputLatency = minOutputLatency
+		summary.MaxOutputLatency = maxOutputLatency
+		summary.AverageTokensPerSecond = totalTokensPerSecond / count
 		summary.MinTokensPerSecond = minTokensPerSecond
 		summary.MaxTokensPerSecond = maxTokensPerSecond
-		summary.AverageThroughput = totalThroughput / float64(summary.SuccessfulTests)
+		summary.AverageThroughput = totalThroughput / count
 		summary.MinThroughput = minThroughput
 		summary.MaxThroughput = maxThroughput
+
+		if validPrefillTPS > 0 {
+			summary.AveragePrefillTokensPerSecond = totalPrefillTokensPerSecond / float64(validPrefillTPS)
+			summary.MinPrefillTokensPerSecond = minPrefillTokensPerSecond
+			summary.MaxPrefillTokensPerSecond = maxPrefillTokensPerSecond
+		}
+
+		if validOutputTPS > 0 {
+			summary.AverageOutputTokensPerSecond = totalOutputTokensPerSecond / float64(validOutputTPS)
+			summary.MinOutputTokensPerSecond = minOutputTokensPerSecond
+			summary.MaxOutputTokensPerSecond = maxOutputTokensPerSecond
+		}
+
 		summary.ErrorRate = float64(summary.FailedTests) / float64(summary.TotalTests)
 	}
 
@@ -264,7 +431,7 @@ func (s *SpeedTestService) CompareBatches(batches []TestBatch) (*ComparisonResul
 	comparison.LowestErrorRateBatchID = lowestErrorRateBatch.ID
 
 	return &ComparisonResult{
-		Batches:   batches,
+		Batches:    batches,
 		Comparison: comparison,
 	}, nil
 }

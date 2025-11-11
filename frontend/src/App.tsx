@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Header, Sidebar, TestConfigurationComponent, ResultsDashboard, ResultsChart } from './components';
+import React, { useState, useEffect, useRef } from 'react';
+import { Header, Sidebar, TestConfigurationComponent, ResultsDashboard, PerformanceCharts } from './components';
 import { TestConfiguration as TestConfigType, TestBatch } from './types';
 import { useTestProgress } from './hooks';
 import { NAVIGATION_ITEMS } from './utils';
@@ -10,10 +10,14 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'configuration' | 'results' | 'charts'>('configuration');
   const [completedBatches, setCompletedBatches] = useState<TestBatch[]>([]);
   const { testStatus, startTest, updateProgress, completeTest, failTest, stopTest } = useTestProgress();
+  const completedTestsRef = useRef<Set<string>>(new Set());
 
   // Poll for progress updates when test is running
   useEffect(() => {
-    if (!testStatus.isRunning) return;
+    if (!testStatus.isRunning) {
+      completedTestsRef.current.clear();
+      return;
+    }
 
     const interval = setInterval(async () => {
       try {
@@ -21,23 +25,44 @@ const App: React.FC = () => {
         const progress = await GetTestProgress();
 
         if (progress.length > 0) {
-          const latestUpdate = progress[progress.length - 1];
-          const progressPercent = (latestUpdate.testNumber / latestUpdate.totalTests) * 100;
+          let anyFailed = false;
+          let hasRunningUpdates = false;
+          const lastUpdate = progress[progress.length - 1];
 
-          updateProgress(latestUpdate.testNumber, latestUpdate.totalTests,
-            latestUpdate.status === 'failed' ? `Failed: ${latestUpdate.message}` : 'Running'
+          progress.forEach(update => {
+            if (update.status === 'running') {
+              hasRunningUpdates = true;
+              return;
+            }
+
+            completedTestsRef.current.add(update.testId);
+            if (update.status === 'failed') {
+              anyFailed = true;
+            }
+          });
+
+          const totalTests = lastUpdate.totalTests;
+          const completedCount = Math.min(completedTestsRef.current.size, totalTests);
+          const runningStatus = anyFailed ? 'Testing (some failed)' : 'Testing in progress';
+          const completionStatus = anyFailed ? 'Completed with failures' : 'Completed successfully';
+          const isComplete = completedCount >= totalTests;
+
+          updateProgress(
+            completedCount,
+            totalTests,
+            isComplete && !hasRunningUpdates ? completionStatus : runningStatus
           );
 
-          // Check if test is complete
-          if (latestUpdate.testNumber === latestUpdate.totalTests) {
-            completeTest(latestUpdate.status === 'failed' ? 'Failed' : 'Completed');
+          if (isComplete) {
+            completeTest(completionStatus);
 
             // Get the final results
             setTimeout(async () => {
               try {
                 const { GetTestBatch } = await import('./wailsjs/go/main/App');
-                const batch = await GetTestBatch(latestUpdate.batchId);
+                const batch = await GetTestBatch(lastUpdate.batchId);
                 if (batch) {
+                  console.log('Test batch completed:', batch);
                   setCurrentBatch(batch);
                   setCompletedBatches(prev => [...prev, batch]);
                   setActiveTab('results');
@@ -45,7 +70,9 @@ const App: React.FC = () => {
               } catch (error) {
                 console.error('Failed to get test batch:', error);
               }
-            }, 1000);
+            }, 500);
+
+            completedTestsRef.current.clear();
           }
         }
       } catch (error) {
@@ -58,6 +85,7 @@ const App: React.FC = () => {
 
   const handleStartTest = async (config: TestConfigType) => {
     try {
+      completedTestsRef.current.clear();
       startTest(config.testCount);
       const { StartSpeedTest } = await import('./wailsjs/go/main/App');
       await StartSpeedTest(config);
@@ -81,6 +109,7 @@ const App: React.FC = () => {
   };
 
   const handleStopTest = () => {
+    completedTestsRef.current.clear();
     stopTest();
   };
 
@@ -128,19 +157,10 @@ const App: React.FC = () => {
                 )}
 
                 {activeTab === 'charts' && currentBatch && (
-                  <div className="space-y-6">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      <div className="chart-container">
-                        <ResultsChart batch={currentBatch} chartType="latency" />
-                      </div>
-                      <div className="chart-container">
-                        <ResultsChart batch={currentBatch} chartType="throughput" />
-                      </div>
-                    </div>
-                    <div className="chart-container">
-                      <ResultsChart batch={currentBatch} chartType="tokens" />
-                    </div>
-                  </div>
+                  <PerformanceCharts
+                    batch={currentBatch}
+                    onExport={handleExport}
+                  />
                 )}
 
                 {activeTab !== 'configuration' && !currentBatch && (

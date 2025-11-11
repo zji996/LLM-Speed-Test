@@ -70,7 +70,7 @@ func (a *App) StartSpeedTest(config TestConfiguration) (*TestBatch, error) {
 
 // GetTestProgress retrieves the current progress of active tests
 func (a *App) GetTestProgress() ([]ProgressUpdate, error) {
-	var progress []ProgressUpdate
+	progress := make([]ProgressUpdate, 0)
 
 	// Collect progress updates from the channel
 	for {
@@ -86,7 +86,7 @@ func (a *App) GetTestProgress() ([]ProgressUpdate, error) {
 
 // GetTestResults retrieves completed test results
 func (a *App) GetTestResults() ([]TestResult, error) {
-	var results []TestResult
+	results := make([]TestResult, 0)
 
 	// Collect results from the channel
 	for {

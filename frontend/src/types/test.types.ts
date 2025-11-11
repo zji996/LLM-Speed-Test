@@ -25,6 +25,9 @@ export interface TestResult {
   totalTokens: number;
   requestLatency: number; // in milliseconds
   totalLatency: number;   // in milliseconds
+  outputLatency: number;  // in milliseconds
+  prefillTokensPerSecond: number;
+  outputTokensPerSecond: number;
   tokensPerSecond: number;
   throughput: number;
   error?: string;
@@ -39,9 +42,21 @@ export interface TestSummary {
   averageLatency: number;  // in milliseconds
   minLatency: number;      // in milliseconds
   maxLatency: number;      // in milliseconds
+  averagePrefillLatency: number;
+  minPrefillLatency: number;
+  maxPrefillLatency: number;
+  averageOutputLatency: number;
+  minOutputLatency: number;
+  maxOutputLatency: number;
   averageTokensPerSecond: number;
   minTokensPerSecond: number;
   maxTokensPerSecond: number;
+  averagePrefillTokensPerSecond: number;
+  minPrefillTokensPerSecond: number;
+  maxPrefillTokensPerSecond: number;
+  averageOutputTokensPerSecond: number;
+  minOutputTokensPerSecond: number;
+  maxOutputTokensPerSecond: number;
   averageThroughput: number;
   minThroughput: number;
   maxThroughput: number;

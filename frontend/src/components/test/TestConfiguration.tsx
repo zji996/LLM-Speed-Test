@@ -45,11 +45,15 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
         // Load saved configuration from localStorage
         const savedEndpoint = localStorage.getItem('apiEndpoint');
         const savedApiKey = localStorage.getItem('apiKey');
+        const savedModel = localStorage.getItem('selectedModel');
 
+        // IMPORTANT: Preserve API endpoint, key and selected model from localStorage
+        // but use defaults for other settings (like prompt lengths, tokens, etc.)
         const mergedConfig = {
           ...defaultConfig,
           apiEndpoint: savedEndpoint || defaultConfig.apiEndpoint,
-          apiKey: savedApiKey || defaultConfig.apiKey
+          apiKey: savedApiKey || defaultConfig.apiKey,
+          model: savedModel || '' // CRITICAL: Preserve selected model, start with empty string
         };
 
         setConfig(mergedConfig);
@@ -86,6 +90,17 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
         } catch (error) {
           console.error('Failed to save apiKey:', error);
         }
+      } else if (field === 'model') {
+        // CRITICAL: Save selected model to localStorage
+        try {
+          if (value) {
+            localStorage.setItem('selectedModel', value);
+          } else {
+            localStorage.removeItem('selectedModel');
+          }
+        } catch (error) {
+          console.error('Failed to save selectedModel:', error);
+        }
       }
 
       return newConfig;
@@ -120,6 +135,14 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
   };
 
   const handleStartTest = async () => {
+    // Debug: Log the actual configuration being used
+    console.log('Starting speed test with configuration:', {
+      model: config.model,
+      endpoint: config.apiEndpoint,
+      testCount: config.testCount,
+      concurrent: config.concurrentTests
+    });
+
     // Validation
     if (!config.apiKey) {
       setValidationError('请输入API密钥');
@@ -128,6 +151,13 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
 
     if (!config.model) {
       setValidationError('请选择模型');
+      return;
+    }
+
+    // CRITICAL: Verify the selected model is in the available models list
+    const isModelValid = availableModels.some(m => m.id === config.model);
+    if (!isModelValid) {
+      setValidationError(`选择的模型 "${config.model}" 不在可用模型列表中，请先验证API`);
       return;
     }
 
