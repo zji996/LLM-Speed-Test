@@ -2,16 +2,16 @@ export interface TestConfiguration {
   apiEndpoint: string;
   apiKey: string;
   model: string;
-  promptType: string;      // "fixed" or "custom"
+  promptType: string;      // Prompt type is fixed-length in current UI
   promptLength: number;    // Length of prompt in tokens
-  prompt: string;          // Custom prompt (if PromptType is "custom")
+  prompt: string;          // Reserved for future custom prompt support
   maxTokens: number;
   temperature: number;
   topP: number;
   presencePenalty: number;
   frequencyPenalty: number;
-  testCount: number;
-  concurrentTests: number;
+  testCount: number;       // Number of submission rounds
+  concurrentTests: number; // Requests per round (concurrency limit)
   timeout: number;
   headers?: Record<string, string>;
 }
@@ -20,6 +20,9 @@ export interface TestResult {
   id: string;
   timestamp: string;
   configuration: TestConfiguration;
+  testNumber: number;
+  roundNumber: number;
+  roundPosition: number;
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
@@ -28,7 +31,6 @@ export interface TestResult {
   outputLatency: number;  // in milliseconds
   prefillTokensPerSecond: number;
   outputTokensPerSecond: number;
-  tokensPerSecond: number;
   throughput: number;
   error?: string;
   success: boolean;
@@ -48,9 +50,6 @@ export interface TestSummary {
   averageOutputLatency: number;
   minOutputLatency: number;
   maxOutputLatency: number;
-  averageTokensPerSecond: number;
-  minTokensPerSecond: number;
-  maxTokensPerSecond: number;
   averagePrefillTokensPerSecond: number;
   minPrefillTokensPerSecond: number;
   maxPrefillTokensPerSecond: number;
@@ -60,7 +59,27 @@ export interface TestSummary {
   averageThroughput: number;
   minThroughput: number;
   maxThroughput: number;
+  averageRoundThroughput: number;
+  minRoundThroughput: number;
+  maxRoundThroughput: number;
   errorRate: number;
+}
+
+export interface RoundSummary {
+  roundNumber: number;
+  totalRequests: number;
+  successfulRequests: number;
+  failedRequests: number;
+  successRate: number;
+  averagePromptTokens: number;
+  averageCompletionTokens: number;
+  averageTotalTokens: number;
+  averagePrefillLatency: number;
+  averageOutputLatency: number;
+  averageTotalLatency: number;
+  averagePrefillTokensPerSecond: number;
+  averageOutputTokensPerSecond: number;
+  totalOutputTokensPerSecond: number;
 }
 
 export interface TestBatch {
@@ -69,6 +88,7 @@ export interface TestBatch {
   endTime: string;
   configuration: TestConfiguration;
   results: TestResult[];
+  roundSummaries?: RoundSummary[];
   summary: TestSummary;
 }
 
@@ -89,7 +109,7 @@ export interface ComparisonResult {
 export interface ComparisonSummary {
   bestLatencyBatchId: string;
   bestThroughputBatchId: string;
-  bestTokensPerSecBatchId: string;
+  bestRoundThroughputBatchId: string;
   lowestErrorRateBatchId: string;
 }
 

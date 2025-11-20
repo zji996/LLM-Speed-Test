@@ -21,13 +21,6 @@ export const DEFAULT_CONFIG = {
   timeout: 60
 };
 
-export const PROMPT_TYPES = [
-  { value: 'fixed', label: '固定长度' },
-  { value: 'simple', label: '简单提示' },
-  { value: 'complex', label: '复杂提示' },
-  { value: 'custom', label: '自定义' }
-];
-
 export const PROMPT_LENGTHS = [128, 256, 512, 1024, 2048];
 
 export const EXPORT_FORMATS = [

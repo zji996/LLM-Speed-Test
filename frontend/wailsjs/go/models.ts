@@ -3,7 +3,7 @@ export namespace main {
 	export class ComparisonSummary {
 	    bestLatencyBatchId: string;
 	    bestThroughputBatchId: string;
-	    bestTokensPerSecBatchId: string;
+	    bestRoundThroughputBatchId: string;
 	    lowestErrorRateBatchId: string;
 	
 	    static createFrom(source: any = {}) {
@@ -14,7 +14,7 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.bestLatencyBatchId = source["bestLatencyBatchId"];
 	        this.bestThroughputBatchId = source["bestThroughputBatchId"];
-	        this.bestTokensPerSecBatchId = source["bestTokensPerSecBatchId"];
+	        this.bestRoundThroughputBatchId = source["bestRoundThroughputBatchId"];
 	        this.lowestErrorRateBatchId = source["lowestErrorRateBatchId"];
 	    }
 	}
@@ -31,9 +31,6 @@ export namespace main {
 	    averageOutputLatency: number;
 	    minOutputLatency: number;
 	    maxOutputLatency: number;
-	    averageTokensPerSecond: number;
-	    minTokensPerSecond: number;
-	    maxTokensPerSecond: number;
 	    averagePrefillTokensPerSecond: number;
 	    minPrefillTokensPerSecond: number;
 	    maxPrefillTokensPerSecond: number;
@@ -43,6 +40,9 @@ export namespace main {
 	    averageThroughput: number;
 	    minThroughput: number;
 	    maxThroughput: number;
+	    averageRoundThroughput: number;
+	    minRoundThroughput: number;
+	    maxRoundThroughput: number;
 	    errorRate: number;
 	
 	    static createFrom(source: any = {}) {
@@ -63,9 +63,6 @@ export namespace main {
 	        this.averageOutputLatency = source["averageOutputLatency"];
 	        this.minOutputLatency = source["minOutputLatency"];
 	        this.maxOutputLatency = source["maxOutputLatency"];
-	        this.averageTokensPerSecond = source["averageTokensPerSecond"];
-	        this.minTokensPerSecond = source["minTokensPerSecond"];
-	        this.maxTokensPerSecond = source["maxTokensPerSecond"];
 	        this.averagePrefillTokensPerSecond = source["averagePrefillTokensPerSecond"];
 	        this.minPrefillTokensPerSecond = source["minPrefillTokensPerSecond"];
 	        this.maxPrefillTokensPerSecond = source["maxPrefillTokensPerSecond"];
@@ -75,13 +72,57 @@ export namespace main {
 	        this.averageThroughput = source["averageThroughput"];
 	        this.minThroughput = source["minThroughput"];
 	        this.maxThroughput = source["maxThroughput"];
+	        this.averageRoundThroughput = source["averageRoundThroughput"];
+	        this.minRoundThroughput = source["minRoundThroughput"];
+	        this.maxRoundThroughput = source["maxRoundThroughput"];
 	        this.errorRate = source["errorRate"];
+	    }
+	}
+	export class RoundSummary {
+	    roundNumber: number;
+	    totalRequests: number;
+	    successfulRequests: number;
+	    failedRequests: number;
+	    successRate: number;
+	    averagePromptTokens: number;
+	    averageCompletionTokens: number;
+	    averageTotalTokens: number;
+	    averagePrefillLatency: number;
+	    averageOutputLatency: number;
+	    averageTotalLatency: number;
+	    averagePrefillTokensPerSecond: number;
+	    averageOutputTokensPerSecond: number;
+	    totalOutputTokensPerSecond: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new RoundSummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.roundNumber = source["roundNumber"];
+	        this.totalRequests = source["totalRequests"];
+	        this.successfulRequests = source["successfulRequests"];
+	        this.failedRequests = source["failedRequests"];
+	        this.successRate = source["successRate"];
+	        this.averagePromptTokens = source["averagePromptTokens"];
+	        this.averageCompletionTokens = source["averageCompletionTokens"];
+	        this.averageTotalTokens = source["averageTotalTokens"];
+	        this.averagePrefillLatency = source["averagePrefillLatency"];
+	        this.averageOutputLatency = source["averageOutputLatency"];
+	        this.averageTotalLatency = source["averageTotalLatency"];
+	        this.averagePrefillTokensPerSecond = source["averagePrefillTokensPerSecond"];
+	        this.averageOutputTokensPerSecond = source["averageOutputTokensPerSecond"];
+	        this.totalOutputTokensPerSecond = source["totalOutputTokensPerSecond"];
 	    }
 	}
 	export class TestResult {
 	    id: string;
 	    timestamp: string;
 	    configuration: TestConfiguration;
+	    testNumber: number;
+	    roundNumber: number;
+	    roundPosition: number;
 	    promptTokens: number;
 	    completionTokens: number;
 	    totalTokens: number;
@@ -90,7 +131,6 @@ export namespace main {
 	    outputLatency: number;
 	    prefillTokensPerSecond: number;
 	    outputTokensPerSecond: number;
-	    tokensPerSecond: number;
 	    throughput: number;
 	    error?: string;
 	    success: boolean;
@@ -105,6 +145,9 @@ export namespace main {
 	        this.id = source["id"];
 	        this.timestamp = source["timestamp"];
 	        this.configuration = this.convertValues(source["configuration"], TestConfiguration);
+	        this.testNumber = source["testNumber"];
+	        this.roundNumber = source["roundNumber"];
+	        this.roundPosition = source["roundPosition"];
 	        this.promptTokens = source["promptTokens"];
 	        this.completionTokens = source["completionTokens"];
 	        this.totalTokens = source["totalTokens"];
@@ -113,7 +156,6 @@ export namespace main {
 	        this.outputLatency = source["outputLatency"];
 	        this.prefillTokensPerSecond = source["prefillTokensPerSecond"];
 	        this.outputTokensPerSecond = source["outputTokensPerSecond"];
-	        this.tokensPerSecond = source["tokensPerSecond"];
 	        this.throughput = source["throughput"];
 	        this.error = source["error"];
 	        this.success = source["success"];
@@ -184,6 +226,7 @@ export namespace main {
 	    endTime: string;
 	    configuration: TestConfiguration;
 	    results: TestResult[];
+	    roundSummaries?: RoundSummary[];
 	    summary: TestSummary;
 	
 	    static createFrom(source: any = {}) {
@@ -197,6 +240,7 @@ export namespace main {
 	        this.endTime = source["endTime"];
 	        this.configuration = this.convertValues(source["configuration"], TestConfiguration);
 	        this.results = this.convertValues(source["results"], TestResult);
+	        this.roundSummaries = this.convertValues(source["roundSummaries"], RoundSummary);
 	        this.summary = this.convertValues(source["summary"], TestSummary);
 	    }
 	
@@ -289,6 +333,7 @@ export namespace main {
 	        this.message = source["message"];
 	    }
 	}
+	
 	
 	
 	

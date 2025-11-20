@@ -2,7 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { TestConfiguration, ModelOption } from '../../types';
 import { useModelSelection } from '../../hooks';
 import { Button, Card, Input, Select } from '../common';
-import { PROMPT_TYPES, PROMPT_LENGTHS } from '../../utils';
+import { PROMPT_LENGTHS } from '../../utils';
+
+const MAX_TEST_ROUNDS = 100;
+const MAX_CONCURRENT_TESTS = 50;
 
 interface TestConfigurationProps {
   onStartTest: (config: TestConfiguration) => void;
@@ -32,7 +35,6 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
   const [isValidating, setIsValidating] = useState(false);
   const [validationError, setValidationError] = useState<string>('');
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [showCustomPrompt, setShowCustomPrompt] = useState(false);
   const [customHeaders, setCustomHeaders] = useState<string>('');
 
   useEffect(() => {
@@ -53,7 +55,9 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
           ...defaultConfig,
           apiEndpoint: savedEndpoint || defaultConfig.apiEndpoint,
           apiKey: savedApiKey || defaultConfig.apiKey,
-          model: savedModel || '' // CRITICAL: Preserve selected model, start with empty string
+          model: savedModel || '', // CRITICAL: Preserve selected model, start with empty string
+          promptType: 'fixed',
+          prompt: ''
         };
 
         setConfig(mergedConfig);
@@ -106,12 +110,6 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
       return newConfig;
     });
 
-    if (field === 'promptType') {
-      setShowCustomPrompt(value === 'custom');
-      if (value !== 'custom') {
-        setConfig(prev => ({ ...prev, prompt: '' }));
-      }
-    }
   };
 
   const handleValidateAPI = async () => {
@@ -140,7 +138,8 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
       model: config.model,
       endpoint: config.apiEndpoint,
       testCount: config.testCount,
-      concurrent: config.concurrentTests
+      concurrent: config.concurrentTests,
+      totalRequests: config.testCount * config.concurrentTests
     });
 
     // Validation
@@ -161,18 +160,13 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
       return;
     }
 
-    if (config.testCount < 1 || config.testCount > 100) {
-      setValidationError('测试次数必须在1-100之间');
+    if (config.testCount < 1 || config.testCount > MAX_TEST_ROUNDS) {
+      setValidationError(`测试轮次必须在1-${MAX_TEST_ROUNDS}之间`);
       return;
     }
 
-    if (config.concurrentTests < 1 || config.concurrentTests > config.testCount) {
-      setValidationError('并发数必须在1-测试次数之间');
-      return;
-    }
-
-    if (config.promptType === 'custom' && !config.prompt.trim()) {
-      setValidationError('请输入自定义提示词');
+    if (config.concurrentTests < 1 || config.concurrentTests > MAX_CONCURRENT_TESTS) {
+      setValidationError(`并发数必须在1-${MAX_CONCURRENT_TESTS}之间`);
       return;
     }
 
@@ -198,6 +192,8 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
 
     const finalConfig = {
       ...config,
+      promptType: 'fixed',
+      prompt: '',
       headers
     };
 
@@ -207,11 +203,6 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
   const modelOptions = availableModels.map(model => ({
     value: model.id,
     label: model.name
-  }));
-
-  const promptTypeOptions = PROMPT_TYPES.map(type => ({
-    value: type.value,
-    label: type.label
   }));
 
   const promptLengthOptions = PROMPT_LENGTHS.map(length => ({
@@ -314,35 +305,16 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
             placeholder="请选择模型"
             required
           />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Select
-              label="提示词类型"
-              value={config.promptType}
-              onChange={(value) => handleInputChange('promptType', value)}
-              options={promptTypeOptions}
-              disabled={isRunning}
-            />
-            <Select
-              label="提示词长度 (tokens)"
-              value={config.promptLength.toString()}
-              onChange={(value) => handleInputChange('promptLength', parseInt(value))}
-              options={promptLengthOptions}
-              disabled={isRunning || config.promptType === 'custom'}
-            />
-          </div>
-          {showCustomPrompt && (
-            <div className="animate-slide-up">
-              <label className="form-label">自定义提示词</label>
-              <textarea
-                value={config.prompt}
-                onChange={(e) => handleInputChange('prompt', e.target.value)}
-                rows={4}
-                placeholder="输入您的自定义提示词"
-                disabled={isRunning}
-                className="form-textarea"
-              />
-            </div>
-          )}
+          <Select
+            label="提示词长度 (tokens)"
+            value={config.promptLength.toString()}
+            onChange={(value) => handleInputChange('promptLength', parseInt(value))}
+            options={promptLengthOptions}
+            disabled={isRunning}
+          />
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            提示词类型已固定为固定长度，您只需选择需要的提示词长度即可。
+          </p>
         </div>
       </Card>
 
@@ -356,39 +328,45 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
             测试参数
           </h2>
         </div>
-        <div className="card-content space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Input
-              label="测试次数"
-              type="number"
-              value={config.testCount}
-              onChange={(value) => handleInputChange('testCount', parseInt(value))}
-              disabled={isRunning}
-              min={1}
-              max={100}
-              required
-            />
-            <Input
-              label="并发数"
-              type="number"
-              value={config.concurrentTests}
-              onChange={(value) => handleInputChange('concurrentTests', parseInt(value))}
-              disabled={isRunning}
-              min={1}
-              max={config.testCount}
-              required
-            />
-            <Input
-              label="最大输出长度"
-              type="number"
+          <div className="card-content space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Input
+                label="测试轮次 (提交次数)"
+                type="number"
+                value={config.testCount}
+                onChange={(value) => handleInputChange('testCount', parseInt(value))}
+                disabled={isRunning}
+                min={1}
+                max={MAX_TEST_ROUNDS}
+                required
+              />
+              <Input
+                label="并发数"
+                type="number"
+                value={config.concurrentTests}
+                onChange={(value) => handleInputChange('concurrentTests', parseInt(value))}
+                disabled={isRunning}
+                min={1}
+                max={MAX_CONCURRENT_TESTS}
+                required
+              />
+              <Input
+                label="最大输出长度"
+                type="number"
               value={config.maxTokens}
               onChange={(value) => handleInputChange('maxTokens', parseInt(value))}
               disabled={isRunning}
               min={1}
               max={4096}
-              required
-            />
-          </div>
+                required
+              />
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              总请求数 = 测试轮次 ({config.testCount || 0}) × 并发数 ({config.concurrentTests || 0}) ={' '}
+              <span className="font-semibold text-primary-600 dark:text-primary-400">
+                {config.testCount > 0 && config.concurrentTests > 0 ? config.testCount * config.concurrentTests : 0}
+              </span>
+            </p>
 
           {/* Advanced Parameters */}
           <div className="border-t border-gray-200 dark:border-gray-700 pt-4">

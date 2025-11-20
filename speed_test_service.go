@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"sort"
 	"sync"
 	"time"
 
@@ -39,14 +40,19 @@ func (s *SpeedTestService) RunSpeedTest(config TestConfiguration) (*TestBatch, e
 	batchID := uuid.New().String()
 	startTime := time.Now().Format(time.RFC3339)
 
-	results := make([]TestResult, 0, config.TestCount)
+	totalTests := config.TestCount * config.ConcurrentTests
+	if totalTests <= 0 {
+		return nil, fmt.Errorf("invalid test configuration: total tests must be positive (testCount=%d, concurrentTests=%d)", config.TestCount, config.ConcurrentTests)
+	}
+
+	results := make([]TestResult, 0, totalTests)
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
 	// Create a semaphore to limit concurrent tests
 	semaphore := make(chan struct{}, config.ConcurrentTests)
 
-	for i := 0; i < config.TestCount; i++ {
+	for i := 0; i < totalTests; i++ {
 		wg.Add(1)
 		go func(testNumber int) {
 			defer wg.Done()
@@ -58,7 +64,7 @@ func (s *SpeedTestService) RunSpeedTest(config TestConfiguration) (*TestBatch, e
 				TestID:     uuid.New().String(),
 				BatchID:    batchID,
 				TestNumber: testNumber + 1,
-				TotalTests: config.TestCount,
+				TotalTests: totalTests,
 				Status:     "running",
 			}
 			s.progressChan <- progress
@@ -90,14 +96,44 @@ func (s *SpeedTestService) RunSpeedTest(config TestConfiguration) (*TestBatch, e
 
 	// Calculate summary
 	summary := s.calculateSummary(results)
+	roundSummaries := s.calculateRoundSummaries(results, config)
+
+	if len(roundSummaries) > 0 {
+		minRoundThroughput := math.MaxFloat64
+		maxRoundThroughput := 0.0
+		var totalRoundThroughput float64
+		validRounds := 0
+
+		for _, round := range roundSummaries {
+			if round.TotalOutputTokensPerSecond <= 0 {
+				continue
+			}
+
+			totalRoundThroughput += round.TotalOutputTokensPerSecond
+			if round.TotalOutputTokensPerSecond < minRoundThroughput {
+				minRoundThroughput = round.TotalOutputTokensPerSecond
+			}
+			if round.TotalOutputTokensPerSecond > maxRoundThroughput {
+				maxRoundThroughput = round.TotalOutputTokensPerSecond
+			}
+			validRounds++
+		}
+
+		if validRounds > 0 {
+			summary.AverageRoundThroughput = totalRoundThroughput / float64(validRounds)
+			summary.MinRoundThroughput = minRoundThroughput
+			summary.MaxRoundThroughput = maxRoundThroughput
+		}
+	}
 
 	batch := &TestBatch{
-		ID:            batchID,
-		StartTime:     startTime,
-		EndTime:       endTime,
-		Configuration: config,
-		Results:       results,
-		Summary:       summary,
+		ID:             batchID,
+		StartTime:      startTime,
+		EndTime:        endTime,
+		Configuration:  config,
+		Results:        results,
+		RoundSummaries: roundSummaries,
+		Summary:        summary,
 	}
 
 	return batch, nil
@@ -105,9 +141,19 @@ func (s *SpeedTestService) RunSpeedTest(config TestConfiguration) (*TestBatch, e
 
 // runIndividualTest runs a single speed test
 func (s *SpeedTestService) runIndividualTest(config TestConfiguration, testNumber int) TestResult {
+	concurrency := config.ConcurrentTests
+	if concurrency <= 0 {
+		concurrency = 1
+	}
+	roundNumber := ((testNumber - 1) / concurrency) + 1
+	roundPosition := ((testNumber - 1) % concurrency) + 1
+
 	result := TestResult{
 		Timestamp:     time.Now().Format(time.RFC3339),
 		Configuration: config,
+		TestNumber:    testNumber,
+		RoundNumber:   roundNumber,
+		RoundPosition: roundPosition,
 		Success:       false,
 	}
 
@@ -119,7 +165,7 @@ func (s *SpeedTestService) runIndividualTest(config TestConfiguration, testNumbe
 	if config.PromptType == "custom" && config.Prompt != "" {
 		promptContent = config.Prompt
 	} else {
-		promptGen := NewPromptGenerator()
+		promptGen := NewPromptGenerator(config.Model)
 		promptContent = promptGen.GeneratePrompt(config.PromptLength, config.PromptType)
 	}
 
@@ -198,11 +244,6 @@ func (s *SpeedTestService) runIndividualTest(config TestConfiguration, testNumbe
 
 	result.OutputTokensPerSecond = computeTokensPerSecond(result.CompletionTokens, outputLatencyForCalc)
 
-	totalLatencySeconds := totalLatencyMs / 1000
-	if result.TotalTokens > 0 && totalLatencySeconds > 0 {
-		result.TokensPerSecond = float64(result.TotalTokens) / totalLatencySeconds
-	}
-
 	// Throughput focuses on decode speed to align with third-party tooling
 	result.Throughput = result.OutputTokensPerSecond
 
@@ -271,7 +312,6 @@ func (s *SpeedTestService) calculateSummary(results []TestResult) TestSummary {
 	var totalLatency float64
 	var totalPrefillLatency float64
 	var totalOutputLatency float64
-	var totalTokensPerSecond float64
 	var totalPrefillTokensPerSecond float64
 	var totalOutputTokensPerSecond float64
 	var totalThroughput float64
@@ -282,8 +322,6 @@ func (s *SpeedTestService) calculateSummary(results []TestResult) TestSummary {
 	maxPrefillLatency := 0.0
 	minOutputLatency := math.MaxFloat64
 	maxOutputLatency := 0.0
-	minTokensPerSecond := math.MaxFloat64
-	maxTokensPerSecond := 0.0
 	minPrefillTokensPerSecond := math.MaxFloat64
 	maxPrefillTokensPerSecond := 0.0
 	minOutputTokensPerSecond := math.MaxFloat64
@@ -300,7 +338,6 @@ func (s *SpeedTestService) calculateSummary(results []TestResult) TestSummary {
 			totalLatency += result.TotalLatency
 			totalPrefillLatency += result.RequestLatency
 			totalOutputLatency += result.OutputLatency
-			totalTokensPerSecond += result.TokensPerSecond
 			totalThroughput += result.Throughput
 
 			if result.TotalLatency < minLatency {
@@ -320,12 +357,6 @@ func (s *SpeedTestService) calculateSummary(results []TestResult) TestSummary {
 			}
 			if result.OutputLatency > maxOutputLatency {
 				maxOutputLatency = result.OutputLatency
-			}
-			if result.TokensPerSecond < minTokensPerSecond {
-				minTokensPerSecond = result.TokensPerSecond
-			}
-			if result.TokensPerSecond > maxTokensPerSecond {
-				maxTokensPerSecond = result.TokensPerSecond
 			}
 			if result.Throughput < minThroughput {
 				minThroughput = result.Throughput
@@ -371,9 +402,6 @@ func (s *SpeedTestService) calculateSummary(results []TestResult) TestSummary {
 		summary.AverageOutputLatency = totalOutputLatency / count
 		summary.MinOutputLatency = minOutputLatency
 		summary.MaxOutputLatency = maxOutputLatency
-		summary.AverageTokensPerSecond = totalTokensPerSecond / count
-		summary.MinTokensPerSecond = minTokensPerSecond
-		summary.MaxTokensPerSecond = maxTokensPerSecond
 		summary.AverageThroughput = totalThroughput / count
 		summary.MinThroughput = minThroughput
 		summary.MaxThroughput = maxThroughput
@@ -396,6 +424,112 @@ func (s *SpeedTestService) calculateSummary(results []TestResult) TestSummary {
 	return summary
 }
 
+// calculateRoundSummaries aggregates metrics per configured test round
+func (s *SpeedTestService) calculateRoundSummaries(results []TestResult, config TestConfiguration) []RoundSummary {
+	if len(results) == 0 {
+		return nil
+	}
+
+	concurrency := config.ConcurrentTests
+	if concurrency <= 0 {
+		concurrency = 1
+	}
+
+	type roundAccumulator struct {
+		summary               RoundSummary
+		totalPromptTokens     float64
+		totalCompletionTokens float64
+		totalTokens           float64
+		totalPrefillLatency   float64
+		totalOutputLatency    float64
+		totalLatency          float64
+		totalPrefillTPS       float64
+		totalOutputTPS        float64
+		prefillSamples        int
+		outputSamples         int
+	}
+
+	accumulators := make(map[int]*roundAccumulator)
+
+	for _, result := range results {
+		roundNumber := result.RoundNumber
+		if roundNumber <= 0 {
+			if result.TestNumber > 0 {
+				roundNumber = ((result.TestNumber - 1) / concurrency) + 1
+			} else {
+				roundNumber = 1
+			}
+		}
+
+		acc, ok := accumulators[roundNumber]
+		if !ok {
+			acc = &roundAccumulator{
+				summary: RoundSummary{RoundNumber: roundNumber},
+			}
+			accumulators[roundNumber] = acc
+		}
+
+		acc.summary.TotalRequests++
+
+		if result.Success {
+			acc.summary.SuccessfulRequests++
+			acc.totalPromptTokens += float64(result.PromptTokens)
+			acc.totalCompletionTokens += float64(result.CompletionTokens)
+			acc.totalTokens += float64(result.TotalTokens)
+			acc.totalPrefillLatency += result.RequestLatency
+			acc.totalOutputLatency += result.OutputLatency
+			acc.totalLatency += result.TotalLatency
+			if result.PrefillTokensPerSecond > 0 {
+				acc.totalPrefillTPS += result.PrefillTokensPerSecond
+				acc.prefillSamples++
+			}
+			if result.OutputTokensPerSecond > 0 {
+				acc.totalOutputTPS += result.OutputTokensPerSecond
+				acc.outputSamples++
+			}
+			acc.summary.TotalOutputTokensPerSecond += result.OutputTokensPerSecond
+		} else {
+			acc.summary.FailedRequests++
+		}
+	}
+
+	if len(accumulators) == 0 {
+		return nil
+	}
+
+	roundNumbers := make([]int, 0, len(accumulators))
+	for round := range accumulators {
+		roundNumbers = append(roundNumbers, round)
+	}
+	sort.Ints(roundNumbers)
+
+	rounds := make([]RoundSummary, 0, len(roundNumbers))
+	for _, roundNumber := range roundNumbers {
+		acc := accumulators[roundNumber]
+		if acc.summary.TotalRequests > 0 {
+			acc.summary.SuccessRate = float64(acc.summary.SuccessfulRequests) / float64(acc.summary.TotalRequests)
+		}
+		if acc.summary.SuccessfulRequests > 0 {
+			denom := float64(acc.summary.SuccessfulRequests)
+			acc.summary.AveragePromptTokens = acc.totalPromptTokens / denom
+			acc.summary.AverageCompletionTokens = acc.totalCompletionTokens / denom
+			acc.summary.AverageTotalTokens = acc.totalTokens / denom
+			acc.summary.AveragePrefillLatency = acc.totalPrefillLatency / denom
+			acc.summary.AverageOutputLatency = acc.totalOutputLatency / denom
+			acc.summary.AverageTotalLatency = acc.totalLatency / denom
+			if acc.prefillSamples > 0 {
+				acc.summary.AveragePrefillTokensPerSecond = acc.totalPrefillTPS / float64(acc.prefillSamples)
+			}
+			if acc.outputSamples > 0 {
+				acc.summary.AverageOutputTokensPerSecond = acc.totalOutputTPS / float64(acc.outputSamples)
+			}
+		}
+		rounds = append(rounds, acc.summary)
+	}
+
+	return rounds
+}
+
 // CompareBatches compares multiple test batches
 func (s *SpeedTestService) CompareBatches(batches []TestBatch) (*ComparisonResult, error) {
 	if len(batches) < 2 {
@@ -407,7 +541,7 @@ func (s *SpeedTestService) CompareBatches(batches []TestBatch) (*ComparisonResul
 	// Find best performing batches
 	bestLatencyBatch := batches[0]
 	bestThroughputBatch := batches[0]
-	bestTokensPerSecBatch := batches[0]
+	bestRoundThroughputBatch := batches[0]
 	lowestErrorRateBatch := batches[0]
 
 	for _, batch := range batches {
@@ -417,8 +551,8 @@ func (s *SpeedTestService) CompareBatches(batches []TestBatch) (*ComparisonResul
 		if batch.Summary.AverageThroughput > bestThroughputBatch.Summary.AverageThroughput {
 			bestThroughputBatch = batch
 		}
-		if batch.Summary.AverageTokensPerSecond > bestTokensPerSecBatch.Summary.AverageTokensPerSecond {
-			bestTokensPerSecBatch = batch
+		if batch.Summary.AverageRoundThroughput > bestRoundThroughputBatch.Summary.AverageRoundThroughput {
+			bestRoundThroughputBatch = batch
 		}
 		if batch.Summary.ErrorRate < lowestErrorRateBatch.Summary.ErrorRate {
 			lowestErrorRateBatch = batch
@@ -427,7 +561,7 @@ func (s *SpeedTestService) CompareBatches(batches []TestBatch) (*ComparisonResul
 
 	comparison.BestLatencyBatchID = bestLatencyBatch.ID
 	comparison.BestThroughputBatchID = bestThroughputBatch.ID
-	comparison.BestTokensPerSecBatchID = bestTokensPerSecBatch.ID
+	comparison.BestRoundThroughputBatchID = bestRoundThroughputBatch.ID
 	comparison.LowestErrorRateBatchID = lowestErrorRateBatch.ID
 
 	return &ComparisonResult{

@@ -2,22 +2,29 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
 	"strings"
 	"time"
+
+	tiktoken "github.com/pkoukk/tiktoken-go"
 )
 
 // PromptGenerator generates test prompts of specified token lengths
 type PromptGenerator struct {
-	wordPool []string
-	rng      *rand.Rand
+	wordPool  []string
+	rng       *rand.Rand
+	tokenizer *tiktoken.Tiktoken
 }
 
+const defaultTokenizerEncoding = "cl100k_base"
+
 // NewPromptGenerator creates a new prompt generator
-func NewPromptGenerator() *PromptGenerator {
+func NewPromptGenerator(model string) *PromptGenerator {
 	return &PromptGenerator{
-		wordPool: generateWordPool(),
-		rng:      rand.New(rand.NewSource(time.Now().UnixNano())),
+		wordPool:  generateWordPool(),
+		rng:       rand.New(rand.NewSource(time.Now().UnixNano())),
+		tokenizer: initTokenizer(model),
 	}
 }
 
@@ -37,32 +44,41 @@ func (pg *PromptGenerator) GeneratePrompt(targetTokens int, promptType string) s
 
 // generateFixedLengthPrompt creates a prompt with approximately targetTokens tokens
 func (pg *PromptGenerator) generateFixedLengthPrompt(targetTokens int) string {
-	// Rough estimate: average English word is 1.3 tokens
-	targetWords := int(float64(targetTokens) / 1.3)
-
-	var words []string
-	for i := 0; i < targetWords; i++ {
-		words = append(words, pg.wordPool[pg.rng.Intn(len(pg.wordPool))])
+	if targetTokens <= 0 {
+		targetTokens = 1
 	}
 
-	// Add a task instruction at the end to ensure the model has something to do
 	instruction := "Please continue this text with a coherent story or explanation."
+	instructionTokens := pg.countTokens(instruction)
+	fillerTarget := targetTokens - instructionTokens
+	if fillerTarget < 0 {
+		fillerTarget = targetTokens
+	}
 
-	return strings.Join(words, " ") + " " + instruction
+	filler := pg.generateFillerWords(fillerTarget)
+	prompt := strings.TrimSpace(filler)
+	if prompt != "" {
+		prompt += " "
+	}
+	prompt += instruction
+
+	return pg.ensureMinimumTokens(prompt, targetTokens)
 }
 
 // generateSimplePrompt creates a simple prompt for basic testing
 func (pg *PromptGenerator) generateSimplePrompt(targetTokens int) string {
-	basePrompt := "Please write a detailed explanation about artificial intelligence and machine learning. "
+	basePrompt := "Please write a detailed explanation about artificial intelligence and machine learning."
 
 	// Add filler words to reach target length
-	remainingTokens := targetTokens - estimateTokens(basePrompt)
+	remainingTokens := targetTokens - pg.countTokens(basePrompt)
 	if remainingTokens > 0 {
 		fillerWords := pg.generateFillerWords(remainingTokens)
-		basePrompt += fillerWords
+		if fillerWords != "" {
+			basePrompt = strings.TrimSpace(basePrompt + " " + fillerWords)
+		}
 	}
 
-	return basePrompt
+	return pg.ensureMinimumTokens(basePrompt, targetTokens)
 }
 
 // generateComplexPrompt creates a more complex prompt for thorough testing
@@ -74,31 +90,49 @@ func (pg *PromptGenerator) generateComplexPrompt(targetTokens int) string {
 	basePrompt := introduction + context + task
 
 	// Add filler content to reach target length
-	remainingTokens := targetTokens - estimateTokens(basePrompt)
+	remainingTokens := targetTokens - pg.countTokens(basePrompt)
 	if remainingTokens > 0 {
 		fillerContent := pg.generateTechnicalFiller(remainingTokens)
 		basePrompt += fillerContent
 	}
 
-	return basePrompt
+	return pg.ensureMinimumTokens(basePrompt, targetTokens)
 }
 
 // generateFillerWords creates filler words to reach target token count
 func (pg *PromptGenerator) generateFillerWords(targetTokens int) string {
-	var words []string
+	if targetTokens <= 0 {
+		return ""
+	}
+
+	var builder strings.Builder
 	currentTokens := 0
+	firstWord := true
 
 	for currentTokens < targetTokens {
 		word := pg.wordPool[pg.rng.Intn(len(pg.wordPool))]
-		words = append(words, word)
-		currentTokens += estimateTokens(word)
+		fragment := word
+		if !firstWord {
+			fragment = " " + word
+		}
+		builder.WriteString(fragment)
+		wordTokens := pg.countTokens(fragment)
+		if wordTokens <= 0 {
+			wordTokens = 1
+		}
+		currentTokens += wordTokens
+		firstWord = false
 	}
 
-	return strings.Join(words, " ")
+	return builder.String()
 }
 
 // generateTechnicalFiller creates technical filler content
 func (pg *PromptGenerator) generateTechnicalFiller(targetTokens int) string {
+	if targetTokens <= 0 {
+		return ""
+	}
+
 	concepts := []string{
 		"neural networks", "deep learning", "machine learning algorithms", "natural language processing",
 		"computer vision", "reinforcement learning", "supervised learning", "unsupervised learning",
@@ -108,24 +142,21 @@ func (pg *PromptGenerator) generateTechnicalFiller(targetTokens int) string {
 		"model optimization", "hyperparameter tuning", "cross-validation", "ensemble methods",
 	}
 
-	var content []string
+	var builder strings.Builder
 	currentTokens := 0
 
 	for currentTokens < targetTokens {
 		concept := concepts[pg.rng.Intn(len(concepts))]
 		phrase := fmt.Sprintf("The application of %s in modern AI systems demonstrates significant potential for advancement. ", concept)
-		content = append(content, phrase)
-		currentTokens += estimateTokens(phrase)
+		builder.WriteString(phrase)
+		phraseTokens := pg.countTokens(phrase)
+		if phraseTokens <= 0 {
+			phraseTokens = 1
+		}
+		currentTokens += phraseTokens
 	}
 
-	return strings.Join(content, "")
-}
-
-// estimateTokens provides a rough estimate of token count for a string
-func estimateTokens(text string) int {
-	// Rough estimation: average 1.3 tokens per word in English
-	words := strings.Fields(text)
-	return int(float64(len(words)) * 1.3)
+	return builder.String()
 }
 
 // generateWordPool creates a pool of common English words
@@ -150,6 +181,55 @@ func generateWordPool() []string {
 		"result", "output", "outcome", "conclusion", "finding", "discovery", "insight",
 		"method", "approach", "technique", "procedure", "strategy", "solution", "answer",
 	}
+}
+
+func initTokenizer(model string) *tiktoken.Tiktoken {
+	if model != "" {
+		if enc, err := tiktoken.EncodingForModel(model); err == nil {
+			return enc
+		} else {
+			log.Printf("prompt generator: unable to load tokenizer for model %s: %v", model, err)
+		}
+	}
+
+	enc, err := tiktoken.GetEncoding(defaultTokenizerEncoding)
+	if err != nil {
+		log.Printf("prompt generator: failed to load default tokenizer (%s): %v", defaultTokenizerEncoding, err)
+		return nil
+	}
+
+	return enc
+}
+
+func (pg *PromptGenerator) countTokens(text string) int {
+	if pg != nil && pg.tokenizer != nil {
+		return len(pg.tokenizer.Encode(text, nil, nil))
+	}
+
+	return EstimateActualTokens(text)
+}
+
+func (pg *PromptGenerator) ensureMinimumTokens(prompt string, targetTokens int) string {
+	trimmed := strings.TrimSpace(prompt)
+	if targetTokens <= 0 {
+		return trimmed
+	}
+
+	currentTokens := pg.countTokens(trimmed)
+	if currentTokens >= targetTokens {
+		return trimmed
+	}
+
+	padding := pg.generateFillerWords(targetTokens - currentTokens)
+	if padding == "" {
+		return trimmed
+	}
+
+	if trimmed == "" {
+		return strings.TrimSpace(padding)
+	}
+
+	return strings.TrimSpace(trimmed + " " + padding)
 }
 
 // GetPromptTypes returns available prompt types

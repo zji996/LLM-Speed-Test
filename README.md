@@ -6,14 +6,15 @@ A cross-platform desktop application for testing and comparing the performance o
 
 ### Core Functionality
 - **OpenAI-Compatible API Support**: Works with OpenAI, Azure OpenAI, and other compatible endpoints
-- **Comprehensive Speed Testing**: Measures latency, throughput, and tokens per second
+- **Comprehensive Speed Testing**: Measures latency, per-request throughput, and aggregate round throughput
 - **Configurable Test Parameters**: Customizable prompts, token limits, temperature, and test count
 - **Concurrent Testing**: Supports parallel test execution for faster results
 - **Real-time Progress Monitoring**: Live updates during test execution
 
 ### Data Analysis & Visualization
-- **Interactive Charts**: Visual representation of test results (latency, throughput, tokens/second)
-- **Detailed Metrics**: Average, minimum, maximum values for all performance indicators
+- **Interactive Charts**: Visual representation of test results (latency, throughput, round throughput)
+- **Detailed Metrics**: Average, minimum, maximum values for all performance indicators, plus per-round totals
+- **Per-Round Insights**: The results dashboard now groups results by round, showing success rates, token counts, latencies, and aggregate round throughput instead of per-request tokens/s
 - **Test Comparison**: Compare performance across different models or configurations
 - **Individual Test Results**: Detailed breakdown of each test execution
 
@@ -95,13 +96,13 @@ wails dev
 
 ### 4. Analyze Results
 - View summary statistics
-- Examine individual test results
+- Examine per-round aggregates (success rate, average latencies, and aggregate throughput)
 - Compare different test runs
-- Export data in various formats
+- Export data in various formats, including the new round summary section for CSV/JSON
 
 ### 5. Visualize Data
 - Switch to the Charts tab
-- View latency, throughput, and tokens per second charts
+- View latency, throughput, and round-throughput charts
 - Analyze performance trends
 
 ## Configuration Options
@@ -130,9 +131,14 @@ wails dev
 - **Average/Min/Max**: Statistical analysis
 
 ### Throughput
-- **Tokens per Second**: Rate of token generation
-- **Throughput**: Overall processing speed
+- **Tokens per Second**: Rate of token generation for each stream phase (prefill/output)
+- **Throughput**: Overall processing speed per request
 - **Average/Min/Max**: Statistical analysis
+
+### Round Throughput
+- **Aggregate Round Throughput**: Sum of output tokens per second across all concurrent requests in a round; this is the primary “felt” performance metric now surfaced
+- **Per-Round Totals**: Average, minimum, and maximum for round throughput across the entire batch
+- **Table Support**: Round summaries are exported alongside request-level data when saving CSV or JSON
 
 ### Reliability
 - **Success Rate**: Percentage of successful requests
@@ -152,7 +158,7 @@ wails dev
 
 ### PNG (Charts)
 - Visual representations of test results
-- Latency, throughput, and tokens per second charts
+- Latency, throughput, and round-throughput charts
 - High-quality images for reports
 
 ## Technical Details

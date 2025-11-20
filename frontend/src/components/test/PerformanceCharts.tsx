@@ -44,7 +44,7 @@ const PerformanceCharts: React.FC<PerformanceChartsProps> = ({ batch, onExport }
     try {
       const options: ExportOptions = {
         includeCharts: true,
-        chartTypes: ['latency', 'throughput', 'tokens'],
+        chartTypes: ['latency', 'throughput', 'roundThroughput'],
         dateFormat: 'YYYY-MM-DD HH:mm',
       };
       await onExport(exportFormat, options);
@@ -64,7 +64,7 @@ const PerformanceCharts: React.FC<PerformanceChartsProps> = ({ batch, onExport }
               <p className="text-sm font-medium text-primary-600 dark:text-primary-400">性能图表总览</p>
               <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mt-1">可视化分析与导出</h2>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                通过趋势图快速对比不同测试轮次的延迟、吞吐与 tokens/s，并支持直接导出展示用图片。
+                通过趋势图快速对比不同测试轮次的延迟、单请求吞吐与轮次总吞吐，并支持直接导出展示用图片。
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -123,7 +123,7 @@ const PerformanceCharts: React.FC<PerformanceChartsProps> = ({ batch, onExport }
         <ResultsChart batch={batch} chartType="throughput" />
       </div>
 
-      <ResultsChart batch={batch} chartType="tokens" />
+      <ResultsChart batch={batch} chartType="roundThroughput" />
     </div>
   );
 };

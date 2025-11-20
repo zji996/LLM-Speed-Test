@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { TestBatch, ExportFormat, ExportOptions } from '../../types';
+import React, { useMemo, useState } from 'react';
+import { TestBatch, ExportFormat, ExportOptions, RoundSummary } from '../../types';
+import { computeRoundSummaries } from '../../utils/roundSummary';
 
 interface ResultsDashboardProps {
   batch: TestBatch;
@@ -9,13 +10,14 @@ interface ResultsDashboardProps {
 const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ batch, onExport }) => {
   const [exportFormat, setExportFormat] = useState<ExportFormat>('csv');
   const [isExporting, setIsExporting] = useState(false);
+  const roundSummaries = useMemo<RoundSummary[]>(() => computeRoundSummaries(batch), [batch]);
 
   const handleExport = async () => {
     setIsExporting(true);
     try {
       const options: ExportOptions = {
         includeCharts: true,
-        chartTypes: ['latency', 'throughput', 'tokens']
+        chartTypes: ['latency', 'throughput', 'roundThroughput']
       };
       await onExport(exportFormat, options);
     } catch (error) {
@@ -48,7 +50,28 @@ const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ batch, onExport }) 
   };
 
   const formatPercentage = (rate: number): string => {
+    if (!Number.isFinite(rate)) return '0.0%';
     return `${(rate * 100).toFixed(1)}%`;
+  };
+
+  const formatTokens = (tokens?: number): string => {
+    if (tokens === undefined || tokens === null || !Number.isFinite(tokens)) {
+      return '--';
+    }
+    return Math.round(tokens).toString();
+  };
+
+  const getRoundRowClass = (round: RoundSummary): string => {
+    if (!round.totalRequests) {
+      return '';
+    }
+    if (round.successfulRequests === round.totalRequests) {
+      return 'bg-success-50/50 dark:bg-success-900/10';
+    }
+    if (round.successfulRequests === 0) {
+      return 'bg-error-50/50 dark:bg-error-900/10';
+    }
+    return 'bg-warning-50/50 dark:bg-warning-900/10';
   };
 
   return (
@@ -204,21 +227,21 @@ const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ batch, onExport }) 
               <svg className="w-5 h-5 mr-2 text-info-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
               </svg>
-              令牌效率
+              轮次总吞吐
             </h3>
           </div>
           <div className="card-content space-y-4">
             <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">平均值</span>
-              <span className="text-lg font-bold text-primary-600 dark:text-primary-400">{formatRate(batch.summary.averageTokensPerSecond)} tokens/s</span>
+              <span className="text-lg font-bold text-primary-600 dark:text-primary-400">{formatRate(batch.summary.averageRoundThroughput)} tokens/s</span>
             </div>
             <div className="flex justify-between items-center p-3 bg-success-50 dark:bg-success-900/20 rounded-lg">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">最小值</span>
-              <span className="text-lg font-bold text-success-600 dark:text-success-400">{formatRate(batch.summary.minTokensPerSecond)} tokens/s</span>
+              <span className="text-lg font-bold text-success-600 dark:text-success-400">{formatRate(batch.summary.minRoundThroughput)} tokens/s</span>
             </div>
             <div className="flex justify-between items-center p-3 bg-warning-50 dark:bg-warning-900/20 rounded-lg">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">最大值</span>
-              <span className="text-lg font-bold text-warning-600 dark:text-warning-400">{formatRate(batch.summary.maxTokensPerSecond)} tokens/s</span>
+              <span className="text-lg font-bold text-warning-600 dark:text-warning-400">{formatRate(batch.summary.maxRoundThroughput)} tokens/s</span>
             </div>
           </div>
         </div>
@@ -256,12 +279,14 @@ const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ batch, onExport }) 
                 <span className="text-sm font-semibold text-primary-600 dark:text-primary-400">{formatDuration(new Date(batch.endTime).getTime() - new Date(batch.startTime).getTime())}</span>
               </div>
               <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">提示词类型</span>
-                <span className="text-sm capitalize bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded">{batch.configuration.promptType}</span>
-              </div>
-              <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">提示词长度</span>
                 <span className="text-sm font-semibold">{batch.configuration.promptLength} tokens</span>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">提交策略</span>
+                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  {batch.configuration.testCount} 轮 × {batch.configuration.concurrentTests} 并发 = {batch.summary.totalTests} 次请求
+                </span>
               </div>
             </div>
           </div>
@@ -321,60 +346,55 @@ const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ batch, onExport }) 
             <svg className="w-5 h-5 mr-2 text-secondary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
             </svg>
-            详细测试结果
+            轮次级详细表现
           </h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            每轮 {batch.configuration.concurrentTests} 并发 · 共 {roundSummaries.length || batch.configuration.testCount} 轮
+          </p>
         </div>
         <div className="card-content">
           <div className="overflow-x-auto responsive-table">
             <table className="table">
               <thead>
                 <tr>
-                  <th className="w-16">#</th>
-                  <th className="w-24">状态</th>
-                  <th className="w-40">提示/输出令牌</th>
-                  <th className="w-40">首Token</th>
-                  <th className="w-40">输出阶段</th>
-                  <th className="w-32">总耗时</th>
-                  <th className="w-40">吞吐表现</th>
-                  <th className="w-48">错误信息</th>
+                  <th className="w-20">轮次</th>
+                  <th className="w-48">请求Tokens</th>
+                  <th className="w-48">平均耗时</th>
+                  <th className="w-44">平均输出吞吐</th>
+                  <th className="w-40">总输出吞吐</th>
                 </tr>
               </thead>
               <tbody>
-                {batch.results.map((result, index) => (
-                  <tr key={result.id} className={result.success ? 'bg-success-50/50 dark:bg-success-900/10' : 'bg-error-50/50 dark:bg-error-900/10'}>
-                    <td className="font-medium">{index + 1}</td>
-                    <td>
-                      <span className={`badge ${result.success ? 'badge-success' : 'badge-error'}`}>
-                        {result.success ? '成功' : '失败'}
-                      </span>
-                    </td>
-                    <td className="font-mono text-sm space-y-1">
-                      <div>Prompt: {result.promptTokens}</div>
-                      <div>Output: {result.completionTokens}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">Total: {result.totalTokens}</div>
-                    </td>
-                    <td className="font-mono text-sm">
-                      <div>{formatDuration(result.requestLatency)}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">{formatRate(result.prefillTokensPerSecond)} tokens/s</div>
-                    </td>
-                    <td className="font-mono text-sm">
-                      <div>{formatDuration(result.outputLatency)}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">{formatRate(result.outputTokensPerSecond)} tokens/s</div>
-                    </td>
-                    <td className="font-mono text-sm">{formatDuration(result.totalLatency)}</td>
-                    <td className="font-mono text-sm">
-                      <div className="font-semibold text-primary-600 dark:text-primary-400">综合: {formatRate(result.tokensPerSecond)} tokens/s</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">输出: {formatRate(result.outputTokensPerSecond)} tokens/s</div>
-                    </td>
-                    <td className="text-sm">
-                      {result.error ? (
-                        <span className="text-error-600 dark:text-error-400 font-medium">{result.error}</span>
-                      ) : (
-                        <span className="text-gray-400 dark:text-gray-500">-</span>
-                      )}
+                {roundSummaries.length > 0 ? (
+                  roundSummaries.map((round) => (
+                    <tr key={`round-${round.roundNumber}`} className={getRoundRowClass(round)}>
+                      <td className="font-semibold text-gray-900 dark:text-gray-100">第 {round.roundNumber} 轮</td>
+                      <td className="font-mono text-xs space-y-1">
+                        <div>Prompt: {formatTokens(round.averagePromptTokens)}</div>
+                        <div>Output: {formatTokens(round.averageCompletionTokens)}</div>
+                        <div>Total: {formatTokens(round.averageTotalTokens)}</div>
+                      </td>
+                      <td className="font-mono text-xs space-y-1">
+                        <div>TTFT: {formatDuration(round.averagePrefillLatency)}</div>
+                        <div>输出: {formatDuration(round.averageOutputLatency)}</div>
+                        <div>总计: {formatDuration(round.averageTotalLatency)}</div>
+                      </td>
+                      <td className="font-mono text-sm space-y-1">
+                        <div className="font-semibold text-orange-600 dark:text-orange-400">{formatRate(round.averageOutputTokensPerSecond)} tokens/s</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">预填充: {formatRate(round.averagePrefillTokensPerSecond)} tokens/s</div>
+                      </td>
+                      <td className="font-mono text-sm font-semibold text-primary-600 dark:text-primary-400">
+                        {formatRate(round.totalOutputTokensPerSecond)} tokens/s
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="text-center text-gray-500 dark:text-gray-400 py-6">
+                      暂无可用的轮次数据，请先完成一次完整的测试。
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>

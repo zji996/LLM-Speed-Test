@@ -62,6 +62,8 @@ func (s *ExportService) exportCSV(batch TestBatch, options ExportOptions) (strin
 	header := []string{
 		"Test ID",
 		"Timestamp",
+		"Round #",
+		"Round Slot",
 		"Status",
 		"Total Latency (ms)",
 		"Time To First Token (ms)",
@@ -71,7 +73,6 @@ func (s *ExportService) exportCSV(batch TestBatch, options ExportOptions) (strin
 		"Total Tokens",
 		"Prefill Tokens Per Second",
 		"Output Tokens Per Second",
-		"Tokens Per Second",
 		"Throughput",
 		"Error",
 	}
@@ -85,6 +86,8 @@ func (s *ExportService) exportCSV(batch TestBatch, options ExportOptions) (strin
 		row := []string{
 			result.ID,
 			result.Timestamp,
+			strconv.Itoa(result.RoundNumber),
+			strconv.Itoa(result.RoundPosition),
 			map[bool]string{true: "Success", false: "Failed"}[result.Success],
 			fmt.Sprintf("%.2f", result.TotalLatency),
 			fmt.Sprintf("%.2f", result.RequestLatency),
@@ -94,7 +97,6 @@ func (s *ExportService) exportCSV(batch TestBatch, options ExportOptions) (strin
 			strconv.Itoa(result.TotalTokens),
 			fmt.Sprintf("%.2f", result.PrefillTokensPerSecond),
 			fmt.Sprintf("%.2f", result.OutputTokensPerSecond),
-			fmt.Sprintf("%.2f", result.TokensPerSecond),
 			fmt.Sprintf("%.2f", result.Throughput),
 			result.Error,
 		}
@@ -128,6 +130,11 @@ func (s *ExportService) exportCSV(batch TestBatch, options ExportOptions) (strin
 	writer.Write([]string{"Minimum", fmt.Sprintf("%.2f", batch.Summary.MinThroughput)})
 	writer.Write([]string{"Maximum", fmt.Sprintf("%.2f", batch.Summary.MaxThroughput)})
 	writer.Write([]string{})
+	writer.Write([]string{"ROUND THROUGHPUT (aggregate decode tokens/second)"})
+	writer.Write([]string{"Average", fmt.Sprintf("%.2f", batch.Summary.AverageRoundThroughput)})
+	writer.Write([]string{"Minimum", fmt.Sprintf("%.2f", batch.Summary.MinRoundThroughput)})
+	writer.Write([]string{"Maximum", fmt.Sprintf("%.2f", batch.Summary.MaxRoundThroughput)})
+	writer.Write([]string{})
 	writer.Write([]string{"PREFILL TOKENS/SEC"})
 	writer.Write([]string{"Average", fmt.Sprintf("%.2f", batch.Summary.AveragePrefillTokensPerSecond)})
 	writer.Write([]string{"Minimum", fmt.Sprintf("%.2f", batch.Summary.MinPrefillTokensPerSecond)})
@@ -137,6 +144,25 @@ func (s *ExportService) exportCSV(batch TestBatch, options ExportOptions) (strin
 	writer.Write([]string{"Average", fmt.Sprintf("%.2f", batch.Summary.AverageOutputTokensPerSecond)})
 	writer.Write([]string{"Minimum", fmt.Sprintf("%.2f", batch.Summary.MinOutputTokensPerSecond)})
 	writer.Write([]string{"Maximum", fmt.Sprintf("%.2f", batch.Summary.MaxOutputTokensPerSecond)})
+
+	if len(batch.RoundSummaries) > 0 {
+		writer.Write([]string{})
+		writer.Write([]string{"ROUND SUMMARIES"})
+		writer.Write([]string{"Round #", "Requests", "Successes", "Success Rate", "Avg Output TPS", "Total Output TPS", "Avg TTFT (ms)", "Avg Decode (ms)", "Avg Total (ms)"})
+		for _, round := range batch.RoundSummaries {
+			writer.Write([]string{
+				strconv.Itoa(round.RoundNumber),
+				strconv.Itoa(round.TotalRequests),
+				strconv.Itoa(round.SuccessfulRequests),
+				fmt.Sprintf("%.2f%%", round.SuccessRate*100),
+				fmt.Sprintf("%.2f", round.AverageOutputTokensPerSecond),
+				fmt.Sprintf("%.2f", round.TotalOutputTokensPerSecond),
+				fmt.Sprintf("%.2f", round.AveragePrefillLatency),
+				fmt.Sprintf("%.2f", round.AverageOutputLatency),
+				fmt.Sprintf("%.2f", round.AverageTotalLatency),
+			})
+		}
+	}
 
 	return filepath, nil
 }
@@ -202,7 +228,7 @@ func (s *ExportService) exportCharts(batch TestBatch, options ExportOptions) (st
 	fmt.Fprintf(file, "CHART DATA FOR LLM SPEED TEST\n")
 	fmt.Fprintf(file, "Batch ID: %s\n", batch.ID)
 	fmt.Fprintf(file, "Model: %s\n", batch.Configuration.Model)
-	fmt.Fprintf(file, "Test Count: %d\n\n", batch.Configuration.TestCount)
+	fmt.Fprintf(file, "Test Rounds: %d (Total Requests: %d)\n\n", batch.Configuration.TestCount, len(batch.Results))
 
 	// Latency data
 	fmt.Fprintf(file, "LATENCY DATA (ms):\n")
@@ -221,11 +247,11 @@ func (s *ExportService) exportCharts(batch TestBatch, options ExportOptions) (st
 		}
 	}
 
-	fmt.Fprintf(file, "\nTOKENS PER SECOND DATA:\n")
-	fmt.Fprintf(file, "Test#,TokensPerSecond\n")
-	for i, result := range batch.Results {
-		if result.Success {
-			fmt.Fprintf(file, "%d,%.2f\n", i+1, result.TokensPerSecond)
+	fmt.Fprintf(file, "\nROUND THROUGHPUT DATA (tokens/second):\n")
+	fmt.Fprintf(file, "Round#,TotalThroughput\n")
+	for _, round := range batch.RoundSummaries {
+		if round.TotalOutputTokensPerSecond > 0 {
+			fmt.Fprintf(file, "%d,%.2f\n", round.RoundNumber, round.TotalOutputTokensPerSecond)
 		}
 	}
 
@@ -263,7 +289,7 @@ func (s *ExportService) exportComparisonCSV(comparison ComparisonResult, filepat
 	writer.Write([]string{"COMPARISON SUMMARY"})
 	writer.Write([]string{"Best Latency Batch ID", comparison.Comparison.BestLatencyBatchID})
 	writer.Write([]string{"Best Throughput Batch ID", comparison.Comparison.BestThroughputBatchID})
-	writer.Write([]string{"Best Tokens/Sec Batch ID", comparison.Comparison.BestTokensPerSecBatchID})
+	writer.Write([]string{"Best Round Throughput Batch ID", comparison.Comparison.BestRoundThroughputBatchID})
 	writer.Write([]string{"Lowest Error Rate Batch ID", comparison.Comparison.LowestErrorRateBatchID})
 	writer.Write([]string{})
 
@@ -280,9 +306,9 @@ func (s *ExportService) exportComparisonCSV(comparison ComparisonResult, filepat
 		"Avg Throughput",
 		"Min Throughput",
 		"Max Throughput",
-		"Avg Tokens/Sec",
-		"Min Tokens/Sec",
-		"Max Tokens/Sec",
+		"Avg Round Throughput",
+		"Min Round Throughput",
+		"Max Round Throughput",
 	}
 
 	writer.Write(header)
@@ -300,9 +326,9 @@ func (s *ExportService) exportComparisonCSV(comparison ComparisonResult, filepat
 			fmt.Sprintf("%.2f", batch.Summary.AverageThroughput),
 			fmt.Sprintf("%.2f", batch.Summary.MinThroughput),
 			fmt.Sprintf("%.2f", batch.Summary.MaxThroughput),
-			fmt.Sprintf("%.2f", batch.Summary.AverageTokensPerSecond),
-			fmt.Sprintf("%.2f", batch.Summary.MinTokensPerSecond),
-			fmt.Sprintf("%.2f", batch.Summary.MaxTokensPerSecond),
+			fmt.Sprintf("%.2f", batch.Summary.AverageRoundThroughput),
+			fmt.Sprintf("%.2f", batch.Summary.MinRoundThroughput),
+			fmt.Sprintf("%.2f", batch.Summary.MaxRoundThroughput),
 		}
 
 		writer.Write(row)

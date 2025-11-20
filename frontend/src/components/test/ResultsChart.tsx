@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
-import { TestBatch } from '../../types';
+import { RoundSummary, TestBatch } from '../../types';
+import { computeRoundSummaries } from '../../utils/roundSummary';
 
-type ChartMetric = 'latency' | 'throughput' | 'tokens';
+type ChartMetric = 'latency' | 'throughput' | 'roundThroughput';
 
 interface ResultsChartProps {
   batch: TestBatch;
@@ -14,7 +15,8 @@ type BatchSummary = TestBatch['summary'];
 interface ChartConfig {
   label: string;
   description: string;
-  accessor: (result: BatchResult) => number;
+  accessor?: (result: BatchResult) => number;
+  roundAccessor?: (round: RoundSummary) => number;
   summary: (summary: BatchSummary) => { average?: number; min?: number; max?: number };
   better: 'higher' | 'lower';
   chipLabel: string;
@@ -66,18 +68,18 @@ const CHART_CONFIG: Record<ChartMetric, ChartConfig> = {
       gradientTo: 'rgba(14,165,233,0.05)',
     },
   },
-  tokens: {
-    label: 'Tokens/s 趋势',
-    description: '统计整体 tokens/s（预填充 + 解码），用于衡量端到端生成效率',
-    accessor: (result) => result.tokensPerSecond,
+  roundThroughput: {
+    label: '轮次总吞吐趋势',
+    description: '展示每个测试轮中所有并发请求的输出吞吐总和（tokens/sec），用于衡量整体出词速度',
+    roundAccessor: (round) => round.totalOutputTokensPerSecond,
     summary: (summary) => ({
-      average: summary.averageTokensPerSecond,
-      min: summary.minTokensPerSecond,
-      max: summary.maxTokensPerSecond,
+      average: summary.averageRoundThroughput,
+      min: summary.minRoundThroughput,
+      max: summary.maxRoundThroughput,
     }),
     better: 'higher',
-    chipLabel: '最新速率',
-    bestLabel: '最高速率',
+    chipLabel: '最新轮次吞吐',
+    bestLabel: '最高轮次吞吐',
     color: {
       line: '#f97316',
       dot: '#ea580c',
@@ -104,15 +106,30 @@ const formatDisplayValue = (type: ChartMetric, value?: number | null): string =>
 
 const ResultsChart: React.FC<ResultsChartProps> = ({ batch, chartType }) => {
   const config = CHART_CONFIG[chartType];
+  const roundSummaries = useMemo(() => computeRoundSummaries(batch), [batch]);
   const chartPoints = useMemo(() => {
+    if (config.roundAccessor) {
+      return roundSummaries
+        .map((round) => ({
+          label: `第${round.roundNumber}轮`,
+          value: config.roundAccessor ? config.roundAccessor(round) : 0,
+          success: round.totalRequests > 0,
+        }))
+        .filter(point => point.success && Number.isFinite(point.value));
+    }
+
+    if (!config.accessor) {
+      return [];
+    }
+
     return batch.results
       .map((result, index) => ({
         label: `#${index + 1}`,
-        value: config.accessor(result),
+        value: config.accessor ? config.accessor(result) : 0,
         success: result.success,
       }))
       .filter(point => point.success && Number.isFinite(point.value));
-  }, [batch, chartType, config]);
+  }, [batch, chartType, config, roundSummaries]);
 
   const hasData = chartPoints.length > 0;
   const values = chartPoints.map(point => point.value);

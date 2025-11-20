@@ -13,9 +13,9 @@ type TestConfiguration struct {
 	TopP             float32           `json:"topP"`
 	PresencePenalty  float32           `json:"presencePenalty"`
 	FrequencyPenalty float32           `json:"frequencyPenalty"`
-	TestCount        int               `json:"testCount"`
-	ConcurrentTests  int               `json:"concurrentTests"`
-	Timeout          int               `json:"timeout"` // in seconds
+	TestCount        int               `json:"testCount"`       // Number of submission rounds
+	ConcurrentTests  int               `json:"concurrentTests"` // Requests per round (also concurrency limit)
+	Timeout          int               `json:"timeout"`         // in seconds
 	Headers          map[string]string `json:"headers,omitempty"`
 }
 
@@ -24,6 +24,9 @@ type TestResult struct {
 	ID                     string            `json:"id"`
 	Timestamp              string            `json:"timestamp"`
 	Configuration          TestConfiguration `json:"configuration"`
+	TestNumber             int               `json:"testNumber"`
+	RoundNumber            int               `json:"roundNumber"`
+	RoundPosition          int               `json:"roundPosition"`
 	PromptTokens           int               `json:"promptTokens"`
 	CompletionTokens       int               `json:"completionTokens"`
 	TotalTokens            int               `json:"totalTokens"`
@@ -32,7 +35,6 @@ type TestResult struct {
 	OutputLatency          float64           `json:"outputLatency"`  // ms spent generating tokens
 	PrefillTokensPerSecond float64           `json:"prefillTokensPerSecond"`
 	OutputTokensPerSecond  float64           `json:"outputTokensPerSecond"`
-	TokensPerSecond        float64           `json:"tokensPerSecond"`
 	Throughput             float64           `json:"throughput"` // tokens per second (decode)
 	Error                  string            `json:"error,omitempty"`
 	Success                bool              `json:"success"`
@@ -41,12 +43,13 @@ type TestResult struct {
 
 // TestBatch represents a batch of test results
 type TestBatch struct {
-	ID            string            `json:"id"`
-	StartTime     string            `json:"startTime"`
-	EndTime       string            `json:"endTime"`
-	Configuration TestConfiguration `json:"configuration"`
-	Results       []TestResult      `json:"results"`
-	Summary       TestSummary       `json:"summary"`
+	ID             string            `json:"id"`
+	StartTime      string            `json:"startTime"`
+	EndTime        string            `json:"endTime"`
+	Configuration  TestConfiguration `json:"configuration"`
+	Results        []TestResult      `json:"results"`
+	RoundSummaries []RoundSummary    `json:"roundSummaries,omitempty"`
+	Summary        TestSummary       `json:"summary"`
 }
 
 // TestSummary provides aggregated statistics for a test batch
@@ -63,9 +66,6 @@ type TestSummary struct {
 	AverageOutputLatency          float64 `json:"averageOutputLatency"`
 	MinOutputLatency              float64 `json:"minOutputLatency"`
 	MaxOutputLatency              float64 `json:"maxOutputLatency"`
-	AverageTokensPerSecond        float64 `json:"averageTokensPerSecond"`
-	MinTokensPerSecond            float64 `json:"minTokensPerSecond"`
-	MaxTokensPerSecond            float64 `json:"maxTokensPerSecond"`
 	AveragePrefillTokensPerSecond float64 `json:"averagePrefillTokensPerSecond"`
 	MinPrefillTokensPerSecond     float64 `json:"minPrefillTokensPerSecond"`
 	MaxPrefillTokensPerSecond     float64 `json:"maxPrefillTokensPerSecond"`
@@ -75,7 +75,28 @@ type TestSummary struct {
 	AverageThroughput             float64 `json:"averageThroughput"`
 	MinThroughput                 float64 `json:"minThroughput"`
 	MaxThroughput                 float64 `json:"maxThroughput"`
+	AverageRoundThroughput        float64 `json:"averageRoundThroughput"`
+	MinRoundThroughput            float64 `json:"minRoundThroughput"`
+	MaxRoundThroughput            float64 `json:"maxRoundThroughput"`
 	ErrorRate                     float64 `json:"errorRate"`
+}
+
+// RoundSummary captures aggregated metrics for a single test round
+type RoundSummary struct {
+	RoundNumber                   int     `json:"roundNumber"`
+	TotalRequests                 int     `json:"totalRequests"`
+	SuccessfulRequests            int     `json:"successfulRequests"`
+	FailedRequests                int     `json:"failedRequests"`
+	SuccessRate                   float64 `json:"successRate"`
+	AveragePromptTokens           float64 `json:"averagePromptTokens"`
+	AverageCompletionTokens       float64 `json:"averageCompletionTokens"`
+	AverageTotalTokens            float64 `json:"averageTotalTokens"`
+	AveragePrefillLatency         float64 `json:"averagePrefillLatency"`
+	AverageOutputLatency          float64 `json:"averageOutputLatency"`
+	AverageTotalLatency           float64 `json:"averageTotalLatency"`
+	AveragePrefillTokensPerSecond float64 `json:"averagePrefillTokensPerSecond"`
+	AverageOutputTokensPerSecond  float64 `json:"averageOutputTokensPerSecond"`
+	TotalOutputTokensPerSecond    float64 `json:"totalOutputTokensPerSecond"`
 }
 
 // ProgressUpdate represents a progress update during test execution
@@ -101,10 +122,10 @@ type ComparisonResult struct {
 
 // ComparisonSummary provides comparison statistics
 type ComparisonSummary struct {
-	BestLatencyBatchID      string `json:"bestLatencyBatchId"`
-	BestThroughputBatchID   string `json:"bestThroughputBatchId"`
-	BestTokensPerSecBatchID string `json:"bestTokensPerSecBatchId"`
-	LowestErrorRateBatchID  string `json:"lowestErrorRateBatchId"`
+	BestLatencyBatchID         string `json:"bestLatencyBatchId"`
+	BestThroughputBatchID      string `json:"bestThroughputBatchId"`
+	BestRoundThroughputBatchID string `json:"bestRoundThroughputBatchId"`
+	LowestErrorRateBatchID     string `json:"lowestErrorRateBatchId"`
 }
 
 // ExportFormat represents the format for data export

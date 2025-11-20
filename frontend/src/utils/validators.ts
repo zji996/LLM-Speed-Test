@@ -1,5 +1,8 @@
 import { TestConfiguration } from '../types';
 
+const MAX_TEST_ROUNDS = 100;
+const MAX_CONCURRENT_TESTS = 50;
+
 export const validateApiKey = (apiKey: string): string | null => {
   if (!apiKey || apiKey.trim().length === 0) {
     return '请输入API密钥';
@@ -18,22 +21,15 @@ export const validateModelSelection = (model: string): string | null => {
 };
 
 export const validateTestCount = (testCount: number): string | null => {
-  if (testCount < 1 || testCount > 100) {
-    return '测试次数必须在1-100之间';
+  if (testCount < 1 || testCount > MAX_TEST_ROUNDS) {
+    return `测试轮次必须在1-${MAX_TEST_ROUNDS}之间`;
   }
   return null;
 };
 
-export const validateConcurrentTests = (concurrentTests: number, testCount: number): string | null => {
-  if (concurrentTests < 1 || concurrentTests > testCount) {
-    return '并发数必须在1-测试次数之间';
-  }
-  return null;
-};
-
-export const validateCustomPrompt = (promptType: string, prompt: string): string | null => {
-  if (promptType === 'custom' && !prompt.trim()) {
-    return '请输入自定义提示词';
+export const validateConcurrentTests = (concurrentTests: number): string | null => {
+  if (concurrentTests < 1 || concurrentTests > MAX_CONCURRENT_TESTS) {
+    return `并发数必须在1-${MAX_CONCURRENT_TESTS}之间`;
   }
   return null;
 };
@@ -48,11 +44,8 @@ export const validateConfiguration = (config: TestConfiguration): string | null 
   const testCountError = validateTestCount(config.testCount);
   if (testCountError) return testCountError;
 
-  const concurrentError = validateConcurrentTests(config.concurrentTests, config.testCount);
+  const concurrentError = validateConcurrentTests(config.concurrentTests);
   if (concurrentError) return concurrentError;
-
-  const promptError = validateCustomPrompt(config.promptType, config.prompt);
-  if (promptError) return promptError;
 
   return null;
 };

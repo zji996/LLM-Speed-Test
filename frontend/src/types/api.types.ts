@@ -12,7 +12,7 @@ export interface ExportFormat {
 
 export interface ExportOptions {
   includeCharts?: boolean;
-  chartTypes?: ('latency' | 'throughput' | 'tokens')[];
+  chartTypes?: ('latency' | 'throughput' | 'roundThroughput')[];
 }
 
 export interface ComparisonResult {
@@ -23,7 +23,7 @@ export interface ComparisonResult {
 export interface ComparisonSummary {
   bestLatencyBatchId: string;
   bestThroughputBatchId: string;
-  bestTokensPerSecBatchId: string;
+  bestRoundThroughputBatchId: string;
   lowestErrorRateBatchId: string;
 }
 

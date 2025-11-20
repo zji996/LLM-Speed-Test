@@ -86,7 +86,7 @@ const App: React.FC = () => {
   const handleStartTest = async (config: TestConfigType) => {
     try {
       completedTestsRef.current.clear();
-      startTest(config.testCount);
+      startTest(config.testCount * config.concurrentTests);
       const { StartSpeedTest } = await import('./wailsjs/go/main/App');
       await StartSpeedTest(config);
     } catch (error) {
