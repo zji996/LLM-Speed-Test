@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { TestConfiguration, ModelOption } from '../../types';
+import { TestConfiguration, StepConfiguration, TestMode } from '../../types';
 import { useModelSelection } from '../../hooks';
 import { Button, Card, Input, Select } from '../common';
 import { PROMPT_LENGTHS } from '../../utils';
@@ -8,20 +8,31 @@ const MAX_TEST_ROUNDS = 100;
 const MAX_CONCURRENT_TESTS = 50;
 
 interface TestConfigurationProps {
-  onStartTest: (config: TestConfiguration | TestConfiguration[]) => void;
+  onStartTest: (config: TestConfiguration) => void;
   isRunning: boolean;
 }
 
 const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartTest, isRunning }) => {
-  const [mode, setMode] = useState<'manual' | 'auto'>('manual');
-  const [autoModeType, setAutoModeType] = useState<'list' | 'range'>('range');
-  
-  const [autoSteps, setAutoSteps] = useState({
+  const [mode, setMode] = useState<TestMode>('normal');
+
+  // Separate step configs for different modes so that
+  // switching tabs does not leak values between modes.
+  const [concurrencyStepConfig, setConcurrencyStepConfig] = useState<StepConfiguration>({
     start: 1,
     end: 10,
-    step: 1,
-    customList: '1, 5, 10, 20'
+    step: 1
   });
+  const [concurrencyStepCount, setConcurrencyStepCount] = useState<number>(10);
+
+  // Input-length step defaults: start at 2048 tokens,
+  // step by 2048 tokens. The end value will be derived
+  // from start + step * (count - 1) when starting tests.
+  const [inputStepConfig, setInputStepConfig] = useState<StepConfiguration>({
+    start: 2048,
+    end: 2048 * 3,
+    step: 2048
+  });
+  const [inputStepCount, setInputStepCount] = useState<number>(3);
 
   const [config, setConfig] = useState<TestConfiguration>({
     apiEndpoint: 'https://api.openai.com/v1',
@@ -35,7 +46,9 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
     topP: 0.1,
     presencePenalty: -1.0,
     frequencyPenalty: -1.0,
-    testCount: 10,
+    testMode: 'normal',
+    stepConfig: { start: 1, end: 10, step: 1 },
+    testCount: 2,
     concurrentTests: 3,
     timeout: 60,
     headers: {}
@@ -51,21 +64,64 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
     const loadDefaults = async () => {
       try {
         const { GetDefaultTestConfiguration } = await import('../../../wailsjs/go/main/App');
-        const defaultConfig = await GetDefaultTestConfiguration();
+        const defaultConfig = await GetDefaultTestConfiguration() as TestConfiguration;
         const savedEndpoint = localStorage.getItem('apiEndpoint');
         const savedApiKey = localStorage.getItem('apiKey');
         const savedModel = localStorage.getItem('selectedModel');
+        const savedStateRaw = localStorage.getItem('testConfigStateV1');
 
-        const mergedConfig = {
+        let mergedConfig: TestConfiguration = {
           ...defaultConfig,
           apiEndpoint: savedEndpoint || defaultConfig.apiEndpoint,
           apiKey: savedApiKey || defaultConfig.apiKey,
           model: savedModel || '',
           promptType: 'fixed',
-          prompt: ''
+          prompt: '',
+          testMode: 'normal',
+          stepConfig: { start: 1, end: 10, step: 1 }
+        };
+
+        let restoredMode: TestMode = 'normal';
+
+        if (savedStateRaw) {
+          try {
+            const savedState = JSON.parse(savedStateRaw);
+            if (savedState.config) {
+              mergedConfig = {
+                ...mergedConfig,
+                ...savedState.config
+              };
+            }
+            if (savedState.mode) {
+              restoredMode = savedState.mode as TestMode;
+            }
+            if (savedState.concurrencyStepConfig) {
+              setConcurrencyStepConfig(savedState.concurrencyStepConfig as StepConfiguration);
+            }
+            if (typeof savedState.concurrencyStepCount === 'number') {
+              setConcurrencyStepCount(savedState.concurrencyStepCount as number);
+            }
+            if (savedState.inputStepConfig) {
+              setInputStepConfig(savedState.inputStepConfig as StepConfiguration);
+            }
+            if (typeof savedState.inputStepCount === 'number') {
+              setInputStepCount(savedState.inputStepCount as number);
+            }
+          } catch (e) {
+            console.warn('Failed to restore saved test configuration state:', e);
+          }
+        }
+
+        // Ensure fixed prompt settings regardless of saved state
+        mergedConfig = {
+          ...mergedConfig,
+          promptType: 'fixed',
+          prompt: '',
+          testMode: 'normal'
         };
 
         setConfig(mergedConfig);
+        setMode(restoredMode);
 
         if (savedApiKey && savedEndpoint) {
           fetchModels(savedEndpoint, savedApiKey);
@@ -77,6 +133,24 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
 
     loadDefaults();
   }, []);
+
+  // Persist configuration and step settings so they survive
+  // component remounts (e.g., when navigating to results tab).
+  useEffect(() => {
+    try {
+      const stateToSave = {
+        config,
+        mode,
+        concurrencyStepConfig,
+        concurrencyStepCount,
+        inputStepConfig,
+        inputStepCount
+      };
+      localStorage.setItem('testConfigStateV1', JSON.stringify(stateToSave));
+    } catch (error) {
+      console.warn('Failed to persist test configuration state:', error);
+    }
+  }, [config, mode, concurrencyStepConfig, concurrencyStepCount, inputStepConfig, inputStepCount]);
 
   const handleInputChange = (field: keyof TestConfiguration, value: any) => {
     setConfig(prev => {
@@ -138,35 +212,50 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
       }
     }
 
-    const baseConfig = { ...config, promptType: 'fixed', prompt: '', headers };
+    // Derive active step config based on mode so that
+    // concurrency step and input length step can have
+    // independent ranges and defaults.
+    let activeStepConfig: StepConfiguration = config.stepConfig;
 
-    if (mode === 'manual') {
-      if (config.concurrentTests < 1 || config.concurrentTests > MAX_CONCURRENT_TESTS) {
-        return setValidationError(`并发数必须在1-${MAX_CONCURRENT_TESTS}之间`);
-      }
-      onStartTest(baseConfig);
-    } else {
-      let steps: number[] = [];
-      if (autoModeType === 'list') {
-        steps = autoSteps.customList.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n > 0 && n <= MAX_CONCURRENT_TESTS).sort((a, b) => a - b);
-      } else {
-        const { start, end, step } = autoSteps;
-        if (start > end) return setValidationError('起始并发数不能大于结束并发数');
-        if (step < 1) return setValidationError('步进值必须大于0');
-        for (let i = start; i <= end; i += step) {
-          if (i <= MAX_CONCURRENT_TESTS) steps.push(i);
-        }
-      }
-
-      const uniqueSteps = Array.from(new Set(steps));
-      if (uniqueSteps.length === 0) return setValidationError('生成的并发数列表为空');
-
-      const configs = uniqueSteps.map(concurrency => ({
-        ...baseConfig,
-        concurrentTests: concurrency
-      }));
-      onStartTest(configs);
+    if (mode === 'concurrency_step') {
+      const safeCount = Math.max(1, concurrencyStepCount || 1);
+      const safeStart = concurrencyStepConfig.start > 0 ? concurrencyStepConfig.start : 1;
+      const safeStep = concurrencyStepConfig.step > 0 ? concurrencyStepConfig.step : 1;
+      const derivedEnd = safeStart + safeStep * (safeCount - 1);
+      activeStepConfig = {
+        start: safeStart,
+        end: derivedEnd,
+        step: safeStep
+      };
+    } else if (mode === 'input_step') {
+      const safeCount = Math.max(1, inputStepCount || 1);
+      const safeStart = inputStepConfig.start > 0 ? inputStepConfig.start : 2048;
+      const safeStep = inputStepConfig.step > 0 ? inputStepConfig.step : 2048;
+      const derivedEnd = safeStart + safeStep * (safeCount - 1);
+      activeStepConfig = {
+        start: safeStart,
+        end: derivedEnd,
+        step: safeStep
+      };
     }
+
+    // Validate Step Config
+    if (mode !== 'normal') {
+      if (activeStepConfig.start <= 0 || activeStepConfig.end < activeStepConfig.start || activeStepConfig.step <= 0) {
+        return setValidationError('步进配置无效: 请检查起始值、结束值和步长');
+      }
+    }
+
+    const finalConfig: TestConfiguration = {
+      ...config,
+      testMode: mode,
+      stepConfig: activeStepConfig,
+      promptType: 'fixed',
+      prompt: '',
+      headers
+    };
+
+    onStartTest(finalConfig);
   };
 
   const modelOptions = availableModels.map(model => ({ value: model.id, label: model.name }));
@@ -188,20 +277,20 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
-                API 连接
+                API 连接配置
               </div>
             }
           >
             <div className="space-y-5">
               <Input
-                label="API 端点"
+                label="API 端点 (Base URL)"
                 value={config.apiEndpoint}
                 onChange={(value) => handleInputChange('apiEndpoint', value)}
                 placeholder="https://api.openai.com/v1"
                 disabled={isRunning}
               />
               <Input
-                label="API 密钥"
+                label="API 密钥 (API Key)"
                 type="password"
                 value={config.apiKey}
                 onChange={(value) => handleInputChange('apiKey', value)}
@@ -216,7 +305,7 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
                    disabled={isValidating || isRunning}
                    className="flex-1"
                  >
-                   验证连接
+                   验证连接 & 获取模型
                  </Button>
                  <Button 
                    variant="secondary"
@@ -227,7 +316,7 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
                    }}
                    disabled={isRunning}
                  >
-                   清除
+                   重置
                  </Button>
               </div>
             </div>
@@ -239,7 +328,7 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                 </svg>
-                模型参数
+                模型参数设置
               </div>
             }
           >
@@ -254,14 +343,14 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
                 placeholder={availableModels.length === 0 ? "请先验证 API..." : "请选择模型..."}
               />
               <Select
-                label="提示词长度"
+                label="输入长度 (Prompt Tokens)"
                 value={config.promptLength.toString()}
                 onChange={(value) => handleInputChange('promptLength', parseInt(value))}
                 options={promptLengthOptions}
-                disabled={isRunning}
+                disabled={isRunning || mode === 'input_step'}
               />
               <Input
-                label="最大输出 (Max Tokens)"
+                label="最大输出长度 (Max Output Tokens)"
                 type="number"
                 value={config.maxTokens}
                 onChange={(value) => handleInputChange('maxTokens', parseInt(value))}
@@ -282,38 +371,34 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
                   <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                   </svg>
-                  测试策略
-                </div>
-                <div className="flex bg-white/5 rounded-lg p-1 gap-1">
-                   <button
-                     onClick={() => setMode('manual')}
-                     className={`px-3 py-1 text-xs rounded-md transition-all ${mode === 'manual' ? 'bg-[var(--color-primary)] text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
-                   >
-                     单次测试
-                   </button>
-                   <button
-                     onClick={() => setMode('auto')}
-                     className={`px-3 py-1 text-xs rounded-md transition-all ${mode === 'auto' ? 'bg-[var(--color-accent)] text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
-                   >
-                     自动步进
-                   </button>
+                  测试模式
                 </div>
               </div>
             }
           >
              <div className="space-y-6">
-               <Input
-                  label="每轮请求次数 (Batch Size)"
-                  type="number"
-                  value={config.testCount}
-                  onChange={(value) => handleInputChange('testCount', parseInt(value))}
-                  disabled={isRunning}
-                  min={1}
-                  max={MAX_TEST_ROUNDS}
-                  placeholder="例如: 10"
-                />
+               <div className="grid grid-cols-3 gap-2">
+                   <button
+                     onClick={() => setMode('normal')}
+                     className={`px-3 py-2 text-sm rounded-md transition-all border ${mode === 'normal' ? 'bg-[var(--color-primary)] border-[var(--color-primary)] text-white shadow-lg' : 'border-white/10 text-gray-400 hover:text-white hover:border-white/30'}`}
+                   >
+                     普通测试
+                   </button>
+                   <button
+                     onClick={() => setMode('concurrency_step')}
+                     className={`px-3 py-2 text-sm rounded-md transition-all border ${mode === 'concurrency_step' ? 'bg-[var(--color-accent)] border-[var(--color-accent)] text-white shadow-lg' : 'border-white/10 text-gray-400 hover:text-white hover:border-white/30'}`}
+                   >
+                     并发步进测试
+                   </button>
+                   <button
+                     onClick={() => setMode('input_step')}
+                     className={`px-3 py-2 text-sm rounded-md transition-all border ${mode === 'input_step' ? 'bg-[var(--color-accent)] border-[var(--color-accent)] text-white shadow-lg' : 'border-white/10 text-gray-400 hover:text-white hover:border-white/30'}`}
+                   >
+                     输入长度步进
+                   </button>
+               </div>
 
-               {mode === 'manual' ? (
+               {mode === 'normal' && (
                  <div className="space-y-3 animate-fade-in">
                     <Input
                       label="并发数 (Concurrency)"
@@ -323,6 +408,7 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
                       disabled={isRunning}
                       min={1}
                       max={MAX_CONCURRENT_TESTS}
+                      helperText="同时发起的请求数量"
                     />
                     <div className="flex gap-2 flex-wrap">
                       {[1, 5, 10, 20, 50].map(num => (
@@ -336,28 +422,133 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
                       ))}
                     </div>
                  </div>
-               ) : (
-                 <div className="space-y-4 animate-fade-in bg-white/5 rounded-lg p-4 border border-white/10">
-                    <div className="flex space-x-4 mb-2 border-b border-white/10 pb-2">
-                       <label className="flex items-center cursor-pointer">
-                         <input type="radio" checked={autoModeType === 'range'} onChange={() => setAutoModeType('range')} className="accent-[var(--color-accent)]" />
-                         <span className="ml-2 text-sm text-gray-300">范围扫描 (Start-End)</span>
-                       </label>
-                       <label className="flex items-center cursor-pointer">
-                         <input type="radio" checked={autoModeType === 'list'} onChange={() => setAutoModeType('list')} className="accent-[var(--color-accent)]" />
-                         <span className="ml-2 text-sm text-gray-300">自定义列表</span>
-                       </label>
-                    </div>
+               )}
 
-                    {autoModeType === 'range' ? (
-                      <div className="grid grid-cols-3 gap-3">
-                        <Input label="起始" type="number" value={autoSteps.start} onChange={v => setAutoSteps(p => ({...p, start: parseInt(v)||1}))} />
-                        <Input label="结束" type="number" value={autoSteps.end} onChange={v => setAutoSteps(p => ({...p, end: parseInt(v)||10}))} />
-                        <Input label="步长" type="number" value={autoSteps.step} onChange={v => setAutoSteps(p => ({...p, step: parseInt(v)||1}))} />
-                      </div>
-                    ) : (
-                      <Input label="并发列表 (逗号分隔)" value={autoSteps.customList} onChange={v => setAutoSteps(p => ({...p, customList: v}))} />
-                    )}
+               {mode === 'concurrency_step' && (
+                 <div className="space-y-4 animate-fade-in bg-white/5 rounded-lg p-4 border border-white/10">
+                   <h3 className="text-sm font-semibold text-gray-200 mb-2">
+                     并发数范围设置
+                   </h3>
+                   <div className="grid grid-cols-3 gap-3">
+                     <Input
+                       label="起始值 (Start)"
+                       type="number"
+                       value={concurrencyStepConfig.start}
+                       onChange={v => {
+                         const parsed = parseInt(v);
+                         const start = Number.isNaN(parsed) ? 1 : parsed;
+                         setConcurrencyStepConfig(prev => {
+                           const safeStep = prev.step > 0 ? prev.step : 1;
+                           const count = Math.max(1, concurrencyStepCount || 1);
+                           const end = start + safeStep * (count - 1);
+                           return { ...prev, start, end };
+                         });
+                       }}
+                     />
+                     <Input
+                       label="步长 (Step)"
+                       type="number"
+                       value={concurrencyStepConfig.step}
+                       onChange={v => {
+                         const parsed = parseInt(v);
+                         const step = parsed > 0 ? parsed : 1;
+                         setConcurrencyStepConfig(prev => {
+                           const safeStart = prev.start > 0 ? prev.start : 1;
+                           const count = Math.max(1, concurrencyStepCount || 1);
+                           const end = safeStart + step * (count - 1);
+                           return { ...prev, step, end };
+                         });
+                       }}
+                     />
+                     <Input
+                       label="次数 (Count)"
+                       type="number"
+                       value={concurrencyStepCount}
+                       onChange={v => {
+                         const parsed = parseInt(v);
+                         const count = Math.max(1, parsed || 1);
+                         setConcurrencyStepCount(count);
+                         setConcurrencyStepConfig(prev => {
+                           const safeStart = prev.start > 0 ? prev.start : 1;
+                           const safeStep = prev.step > 0 ? prev.step : 1;
+                           const end = safeStart + safeStep * (count - 1);
+                           return { ...prev, end };
+                         });
+                       }}
+                     />
+                   </div>
+                   <div className="text-xs text-gray-400 mt-1">
+                     预计结束值 (End): {concurrencyStepConfig.end}
+                   </div>
+                 </div>
+               )}
+
+               {mode === 'input_step' && (
+                 <div className="space-y-4 animate-fade-in bg-white/5 rounded-lg p-4 border border-white/10">
+                   <h3 className="text-sm font-semibold text-gray-200 mb-2">
+                     输入长度范围设置 (Tokens)
+                   </h3>
+                   <div className="grid grid-cols-3 gap-3">
+                     <Input
+                       label="起始值 (Start)"
+                       type="number"
+                       value={inputStepConfig.start}
+                       onChange={v => {
+                         const parsed = parseInt(v);
+                         const start = Number.isNaN(parsed) ? 2048 : parsed;
+                         setInputStepConfig(prev => {
+                           const safeStep = prev.step > 0 ? prev.step : 2048;
+                           const count = Math.max(1, inputStepCount || 1);
+                           const end = start + safeStep * (count - 1);
+                           return { ...prev, start, end };
+                         });
+                       }}
+                     />
+                     <Input
+                       label="步长 (Step)"
+                       type="number"
+                       value={inputStepConfig.step}
+                       onChange={v => {
+                         const parsed = parseInt(v);
+                         const step = parsed > 0 ? parsed : 2048;
+                         setInputStepConfig(prev => {
+                           const safeStart = prev.start > 0 ? prev.start : 2048;
+                           const count = Math.max(1, inputStepCount || 1);
+                           const end = safeStart + step * (count - 1);
+                           return { ...prev, step, end };
+                         });
+                       }}
+                     />
+                     <Input
+                       label="次数 (Count)"
+                       type="number"
+                       value={inputStepCount}
+                       onChange={v => {
+                         const parsed = parseInt(v);
+                         const count = Math.max(1, parsed || 1);
+                         setInputStepCount(count);
+                         setInputStepConfig(prev => {
+                           const safeStart = prev.start > 0 ? prev.start : 2048;
+                           const safeStep = prev.step > 0 ? prev.step : 2048;
+                           const end = safeStart + safeStep * (count - 1);
+                           return { ...prev, end };
+                         });
+                       }}
+                     />
+                   </div>
+                   <div className="text-xs text-gray-400 mt-1">
+                     预计结束值 (End): {inputStepConfig.end}
+                   </div>
+                   <div className="pt-2">
+                     <Input
+                       label="固定并发数"
+                       type="number"
+                       value={config.concurrentTests}
+                       onChange={value => handleInputChange('concurrentTests', parseInt(value))}
+                       disabled={isRunning}
+                       min={1}
+                     />
+                   </div>
                  </div>
                )}
                
@@ -371,11 +562,21 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
                     <svg className={`w-4 h-4 mr-2 transform transition-transform ${showAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
-                    高级参数设置
+                    高级参数设置 (Temperature, Top P, etc.)
                  </button>
                  
                  {showAdvanced && (
                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 animate-slide-up p-4 bg-black/20 rounded-lg">
+                      <Input
+                        label="测试轮次 (Rounds per step)"
+                        type="number"
+                        value={config.testCount}
+                        onChange={(value) => handleInputChange('testCount', parseInt(value))}
+                        disabled={isRunning}
+                        min={1}
+                        max={MAX_TEST_ROUNDS}
+                        helperText="每个配置重复执行的轮次，用于平滑波动 (默认 2 次)"
+                      />
                       <Input label="Temperature" type="number" value={config.temperature} onChange={v => handleInputChange('temperature', parseFloat(v))} step={0.1} min={0} max={2} />
                       <Input label="Top P" type="number" value={config.topP} onChange={v => handleInputChange('topP', parseFloat(v))} step={0.1} min={0} max={1} />
                       <Input label="超时 (秒)" type="number" value={config.timeout} onChange={v => handleInputChange('timeout', parseInt(v))} />

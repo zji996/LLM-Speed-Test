@@ -56,6 +56,14 @@ export function GetTestResults() {
 }
 
 /**
+ * Get real-time telemetry updates
+ * @returns {Promise<Array<TelemetryUpdate>>} - Array of telemetry updates
+ */
+export function GetTelemetryUpdates() {
+  return window.go.main.App.GetTelemetryUpdates();
+}
+
+/**
  * Get a test batch by ID
  * @param {string} batchId - Batch ID
  * @returns {Promise<TestBatch>} - Test batch

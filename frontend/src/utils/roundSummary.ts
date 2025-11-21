@@ -27,6 +27,7 @@ const createEmptySummary = (roundNumber: number): RoundSummary => ({
   averageOutputLatency: 0,
   averageTotalLatency: 0,
   averagePrefillTokensPerSecond: 0,
+  totalPrefillTokensPerSecond: 0,
   averageOutputTokensPerSecond: 0,
   totalOutputTokensPerSecond: 0,
 });
@@ -87,6 +88,7 @@ export const computeRoundSummaries = (batch: TestBatch): RoundSummary[] => {
         accumulator.totalOutputTPS += result.outputTokensPerSecond;
         accumulator.outputSamples += 1;
       }
+      accumulator.summary.totalPrefillTokensPerSecond += result.prefillTokensPerSecond;
       accumulator.summary.totalOutputTokensPerSecond += result.outputTokensPerSecond;
     } else {
       accumulator.summary.failedRequests += 1;

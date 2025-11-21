@@ -1,3 +1,11 @@
+export type TestMode = 'normal' | 'concurrency_step' | 'input_step';
+
+export interface StepConfiguration {
+  start: number;
+  end: number;
+  step: number;
+}
+
 export interface TestConfiguration {
   apiEndpoint: string;
   apiKey: string;
@@ -10,6 +18,11 @@ export interface TestConfiguration {
   topP: number;
   presencePenalty: number;
   frequencyPenalty: number;
+
+  // Test Mode
+  testMode: TestMode;
+  stepConfig: StepConfiguration;
+
   testCount: number;
   concurrentTests: number;
   timeout: number;
@@ -17,24 +30,25 @@ export interface TestConfiguration {
 }
 
 export interface TestResult {
-  id?: string;
+  id: string;
   timestamp: string;
   configuration: TestConfiguration;
   testNumber: number;
   roundNumber: number;
   roundPosition: number;
+  actualConcurrency: number;
   success: boolean;
   error?: string;
   response?: string;
-  totalLatency?: number;
-  requestLatency?: number; // Prefill
-  outputLatency?: number;
-  promptTokens?: number;
-  completionTokens?: number;
-  totalTokens?: number;
-  prefillTokensPerSecond?: number;
-  outputTokensPerSecond?: number;
-  throughput?: number;
+  totalLatency: number;
+  requestLatency: number; // Prefill
+  outputLatency: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  prefillTokensPerSecond: number;
+  outputTokensPerSecond: number;
+  throughput: number;
 }
 
 export interface RoundSummary {
@@ -42,15 +56,15 @@ export interface RoundSummary {
   totalRequests: number;
   successfulRequests: number;
   failedRequests: number;
-  successRate?: number;
-  averagePromptTokens?: number;
-  averageCompletionTokens?: number;
-  averageTotalTokens?: number;
-  averagePrefillLatency?: number;
-  averageOutputLatency?: number;
-  averageTotalLatency?: number;
-  averagePrefillTokensPerSecond?: number;
-  averageOutputTokensPerSecond?: number;
+  successRate: number;
+  averagePromptTokens: number;
+  averageCompletionTokens: number;
+  averageTotalTokens: number;
+  averagePrefillLatency: number;
+  averageOutputLatency: number;
+  averageTotalLatency: number;
+  averagePrefillTokensPerSecond: number;
+  averageOutputTokensPerSecond: number;
   totalOutputTokensPerSecond: number;
 }
 

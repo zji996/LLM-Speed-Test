@@ -34,6 +34,10 @@ export function GetPromptTypes() {
   return window['go']['main']['App']['GetPromptTypes']();
 }
 
+export function GetTelemetryUpdates() {
+  return window['go']['main']['App']['GetTelemetryUpdates']();
+}
+
 export function GetTestBatch(arg1) {
   return window['go']['main']['App']['GetTestBatch'](arg1);
 }

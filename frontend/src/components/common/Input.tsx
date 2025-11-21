@@ -9,6 +9,7 @@ export interface InputProps {
   className?: string;
   label?: string;
   error?: string;
+  helperText?: string;
   required?: boolean;
   min?: number;
   max?: number;
@@ -24,6 +25,7 @@ const Input: React.FC<InputProps> = ({
   className = '',
   label,
   error,
+  helperText,
   required = false,
   min,
   max,
@@ -58,7 +60,16 @@ const Input: React.FC<InputProps> = ({
         max={max}
         step={step}
       />
-      {error && <p className="text-xs text-[var(--color-error)] mt-1 animate-fade-in">{error}</p>}
+      {error && (
+        <p className="text-xs text-[var(--color-error)] mt-1 animate-fade-in">
+          {error}
+        </p>
+      )}
+      {!error && helperText && (
+        <p className="text-xs text-gray-400 mt-1">
+          {helperText}
+        </p>
+      )}
     </div>
   );
 };

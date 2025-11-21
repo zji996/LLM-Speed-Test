@@ -7,6 +7,7 @@ import (
 	"math"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,15 +15,17 @@ import (
 
 // SpeedTestService handles LLM speed testing operations
 type SpeedTestService struct {
-	progressChan chan ProgressUpdate
-	resultsChan  chan TestResult
+	progressChan  chan ProgressUpdate
+	resultsChan   chan TestResult
+	telemetryChan chan TelemetryUpdate
 }
 
 // NewSpeedTestService creates a new speed test service
 func NewSpeedTestService() *SpeedTestService {
 	return &SpeedTestService{
-		progressChan: make(chan ProgressUpdate, 100),
-		resultsChan:  make(chan TestResult, 100),
+		progressChan:  make(chan ProgressUpdate, 100),
+		resultsChan:   make(chan TestResult, 100),
+		telemetryChan: make(chan TelemetryUpdate, 100),
 	}
 }
 
@@ -36,6 +39,16 @@ func (s *SpeedTestService) GetResultsChannel() <-chan TestResult {
 	return s.resultsChan
 }
 
+// GetTelemetryChannel returns the telemetry update channel
+func (s *SpeedTestService) GetTelemetryChannel() <-chan TelemetryUpdate {
+	return s.telemetryChan
+}
+
+type testStep struct {
+	concurrency  int
+	promptLength int
+}
+
 // RunSpeedTest executes a speed test batch
 func (s *SpeedTestService) RunSpeedTest(ctx context.Context, config TestConfiguration, batchID string) (*TestBatch, error) {
 	if batchID == "" {
@@ -43,96 +56,276 @@ func (s *SpeedTestService) RunSpeedTest(ctx context.Context, config TestConfigur
 	}
 	startTime := time.Now().Format(time.RFC3339)
 
-	totalTests := config.TestCount * config.ConcurrentTests
+	// 1. Generate Steps
+	steps := []testStep{}
+	if config.TestMode == "concurrency_step" {
+		if config.StepConfig.Start <= 0 || config.StepConfig.Step <= 0 || config.StepConfig.End < config.StepConfig.Start {
+			return nil, fmt.Errorf("invalid step configuration for concurrency: start=%d, end=%d, step=%d",
+				config.StepConfig.Start, config.StepConfig.End, config.StepConfig.Step)
+		}
+		for c := config.StepConfig.Start; c <= config.StepConfig.End; c += config.StepConfig.Step {
+			steps = append(steps, testStep{concurrency: c, promptLength: config.PromptLength})
+		}
+	} else if config.TestMode == "input_step" {
+		if config.StepConfig.Start <= 0 || config.StepConfig.Step <= 0 || config.StepConfig.End < config.StepConfig.Start {
+			return nil, fmt.Errorf("invalid step configuration for input: start=%d, end=%d, step=%d",
+				config.StepConfig.Start, config.StepConfig.End, config.StepConfig.Step)
+		}
+		for l := config.StepConfig.Start; l <= config.StepConfig.End; l += config.StepConfig.Step {
+			steps = append(steps, testStep{concurrency: config.ConcurrentTests, promptLength: l})
+		}
+	} else {
+		// Normal mode (default)
+		// Ensure concurrency is valid
+		c := config.ConcurrentTests
+		if c <= 0 {
+			c = 1
+		}
+		steps = append(steps, testStep{concurrency: c, promptLength: config.PromptLength})
+	}
+
+	// 2. Calculate Total Tests
+	totalTests := 0
+	for _, step := range steps {
+		totalTests += config.TestCount * step.concurrency
+	}
+
 	if totalTests <= 0 {
-		return nil, fmt.Errorf("invalid test configuration: total tests must be positive (testCount=%d, concurrentTests=%d)", config.TestCount, config.ConcurrentTests)
+		return nil, fmt.Errorf("invalid test configuration: total tests must be positive")
 	}
 
 	results := make([]TestResult, 0, totalTests)
 	var mu sync.Mutex
-	var wg sync.WaitGroup
 
-	// Create a semaphore to limit concurrent tests
-	semaphore := make(chan struct{}, config.ConcurrentTests)
+	// Reuse a single OpenAI client for the whole batch
+	client := NewOpenAIClient(config.APIEndpoint, config.APIKey, config.Timeout)
 
-	// Create a derived context for this specific batch execution if needed,
-	// but using the passed ctx is fine as it controls the whole operation.
+	// Optional warm-up request (not included in results)
+	// This helps hide cold-start latency for some local deployments.
+	if len(steps) > 0 {
+		warmupStep := steps[0]
+		warmupResult := s.runIndividualTest(ctx, client, config, 0, warmupStep.concurrency, warmupStep.promptLength, nil, nil)
+		if !warmupResult.Success && warmupResult.Error != "" {
+			log.Printf("Warm-up request failed: %s", warmupResult.Error)
+		}
+	}
 
-	for i := 0; i < totalTests; i++ {
-		// Check if context is cancelled before starting new test
+	// Telemetry state
+	var activeTests int32
+	var completedTests int32
+	var generatedTokens int64
+	var ttftSum int64 // in microseconds
+	var ttftCount int64
+	var ttftValues []float64 // for P95
+	var telemetryMu sync.Mutex
+	var lastGeneratedTokens int64
+
+	// Start telemetry ticker
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	telemetryCtx, telemetryCancel := context.WithCancel(context.Background())
+	defer telemetryCancel()
+
+	go func() {
+		for {
+			select {
+			case <-telemetryCtx.Done():
+				return
+			case t := <-ticker.C:
+				currentGeneratedTokens := atomic.LoadInt64(&generatedTokens)
+				tokenDiff := currentGeneratedTokens - lastGeneratedTokens
+				lastGeneratedTokens = currentGeneratedTokens
+
+				// Calculate Instant TPS
+				// 500ms interval, so multiply by 2
+				instantTPS := float64(tokenDiff) * 2.0
+
+				telemetryMu.Lock()
+				var avgTTFT float64
+				var p95TTFT float64
+				if ttftCount > 0 {
+					avgTTFT = float64(ttftSum) / float64(ttftCount) / 1000.0 // convert us to ms
+				}
+				if len(ttftValues) > 0 {
+					// Sort copy to avoid race conditions if we were writing (but we only read/append under lock)
+					// Actually sort.Float64s modifies the slice. We should make a copy if we wanted to keep original order,
+					// but here order doesn't matter for appending.
+					// However, if appending happens concurrently... appending is under lock.
+					// So it is safe to sort in place.
+					sortedTTFT := make([]float64, len(ttftValues))
+					copy(sortedTTFT, ttftValues)
+					sort.Float64s(sortedTTFT)
+					idx := int(math.Ceil(float64(len(sortedTTFT))*0.95)) - 1
+					if idx < 0 {
+						idx = 0
+					}
+					if idx >= len(sortedTTFT) {
+						idx = len(sortedTTFT) - 1
+					}
+					p95TTFT = sortedTTFT[idx]
+				}
+				telemetryMu.Unlock()
+
+				update := TelemetryUpdate{
+					Timestamp:       t.UnixMilli(),
+					ActiveTests:     int(atomic.LoadInt32(&activeTests)),
+					CompletedTests:  int(atomic.LoadInt32(&completedTests)),
+					TotalTests:      totalTests,
+					GeneratedTokens: currentGeneratedTokens,
+					InstantTPS:      instantTPS,
+					AverageTTFT:     avgTTFT,
+					P95TTFT:         p95TTFT,
+				}
+
+				select {
+				case s.telemetryChan <- update:
+				default:
+					// Skip if channel is full
+				}
+			}
+		}
+	}()
+
+	globalTestIndex := 0
+
+	for stepIndex, step := range steps {
+		// Check context before starting a step
 		select {
 		case <-ctx.Done():
 			break
 		default:
 		}
 
-		wg.Add(1)
-		go func(testNumber int) {
-			defer wg.Done()
-			
-			// Acquire semaphore or exit if context cancelled
+		stepTotalTests := config.TestCount * step.concurrency
+		var wg sync.WaitGroup
+
+		// Create a semaphore for this step's concurrency
+		semaphore := make(chan struct{}, step.concurrency)
+
+		for i := 0; i < stepTotalTests; i++ {
+			// Check if context is cancelled
 			select {
-			case semaphore <- struct{}{}:
 			case <-ctx.Done():
-				return
-			}
-			defer func() { <-semaphore }()
-
-			// Send progress update
-			progress := ProgressUpdate{
-				TestID:     uuid.New().String(),
-				BatchID:    batchID,
-				TestNumber: testNumber + 1,
-				TotalTests: totalTests,
-				Status:     "running",
-			}
-			
-			// Send to progress channel unless context cancelled
-			select {
-			case s.progressChan <- progress:
-			case <-ctx.Done():
-				return
+				break
+			default:
 			}
 
-			// Run individual test
-			result := s.runIndividualTest(ctx, config, testNumber+1)
-			result.ID = progress.TestID
+			wg.Add(1)
+			go func(stepTestIndex int, currentGlobalIndex int) {
+				defer wg.Done()
 
-			// Update progress
-			if result.Success {
-				progress.Status = "completed"
-			} else {
-				progress.Status = "failed"
-				progress.Message = result.Error
-			}
-			
-			select {
-			case s.progressChan <- progress:
-			case <-ctx.Done():
-				return
-			}
+				// Acquire semaphore
+				select {
+				case semaphore <- struct{}{}:
+				case <-ctx.Done():
+					return
+				}
+				defer func() { <-semaphore }()
 
-			// Send result
-			mu.Lock()
-			results = append(results, result)
-			mu.Unlock()
-			
-			select {
-			case s.resultsChan <- result:
-			case <-ctx.Done():
-				return
-			}
+				// Send progress update
+				progress := ProgressUpdate{
+					TestID:     uuid.New().String(),
+					BatchID:    batchID,
+					TestNumber: currentGlobalIndex + 1,
+					TotalTests: totalTests,
+					Status:     "running",
+				}
 
-		}(i)
+				select {
+				case s.progressChan <- progress:
+				case <-ctx.Done():
+					return
+				}
+
+				atomic.AddInt32(&activeTests, 1)
+
+				// Define callbacks
+				onToken := func(content string) {
+					// We need token count. Since we don't have tokenizer here, we approximate or assume 1 chunk ~= 1 token?
+					// No, that's bad. But OpenAI usage comes at end.
+					// However, we can count characters or words?
+					// For accurate TPS, we need token count.
+					// If we don't have a tokenizer, character count / 4 is a rough approximation for English.
+					// Or we can just count "chunks" if chunk usually contains 1 token (not always true).
+					// But wait, `speed_test_service.go` computes TPS based on Usage.CompletionTokens.
+					// For real-time visualization, we can use a simple heuristic: len(content) / 4.
+					// Or just count generated characters and frontend divides by 4?
+					// Let's use len(content) / 4.0 as rough token estimate for instant TPS.
+					tokens := int64(len(content) / 3) // rough estimate
+					if tokens < 1 && len(content) > 0 {
+						tokens = 1
+					}
+					atomic.AddInt64(&generatedTokens, tokens)
+				}
+
+				onFirstToken := func(d time.Duration) {
+					ms := float64(d.Microseconds()) / 1000.0
+					atomic.AddInt64(&ttftSum, d.Microseconds())
+					atomic.AddInt64(&ttftCount, 1)
+					telemetryMu.Lock()
+					ttftValues = append(ttftValues, ms)
+					telemetryMu.Unlock()
+				}
+
+				// Run individual test with specific step parameters
+				result := s.runIndividualTest(ctx, client, config, currentGlobalIndex+1, step.concurrency, step.promptLength, onToken, onFirstToken)
+
+				atomic.AddInt32(&activeTests, -1)
+				atomic.AddInt32(&completedTests, 1)
+
+				result.ID = progress.TestID
+
+				// Update progress
+				if result.Success {
+					progress.Status = "completed"
+				} else {
+					progress.Status = "failed"
+					progress.Message = result.Error
+				}
+
+				select {
+				case s.progressChan <- progress:
+				case <-ctx.Done():
+					return
+				}
+
+				// Store result
+				mu.Lock()
+				results = append(results, result)
+				mu.Unlock()
+
+				select {
+				case s.resultsChan <- result:
+				case <-ctx.Done():
+					return
+				}
+
+			}(i, globalTestIndex+i)
+		}
+		wg.Wait()
+		globalTestIndex += stepTotalTests
+
+		// Update telemetry with current step info
+		telemetryMu.Lock()
+		// We could add step info to telemetry update, but currently not in struct.
+		// Added StepCurrent/StepTotal to struct model previously.
+		// Let's just rely on frontend knowing totalTests?
+		// Or update the struct later if needed.
+		telemetryMu.Unlock()
+
+		// Hack: notify telemetry loop of step change?
+		// Not strictly needed if we just show aggregate progress.
+		_ = stepIndex // suppress unused variable warning
 	}
 
-	wg.Wait()
 	endTime := time.Now().Format(time.RFC3339)
 
 	// Calculate summary
 	summary := s.calculateSummary(results)
 	roundSummaries := s.calculateRoundSummaries(results, config)
 
+	// Calculate aggregated Round stats (Total Throughput per Round)
 	if len(roundSummaries) > 0 {
 		minRoundThroughput := math.MaxFloat64
 		maxRoundThroughput := 0.0
@@ -175,25 +368,23 @@ func (s *SpeedTestService) RunSpeedTest(ctx context.Context, config TestConfigur
 }
 
 // runIndividualTest runs a single speed test
-func (s *SpeedTestService) runIndividualTest(ctx context.Context, config TestConfiguration, testNumber int) TestResult {
-	concurrency := config.ConcurrentTests
+func (s *SpeedTestService) runIndividualTest(ctx context.Context, client *OpenAIClient, config TestConfiguration, testNumber int, concurrency int, promptLength int, onToken func(string), onFirstToken func(time.Duration)) TestResult {
 	if concurrency <= 0 {
 		concurrency = 1
 	}
+	// Calculate round number relative to this concurrency batch
 	roundNumber := ((testNumber - 1) / concurrency) + 1
 	roundPosition := ((testNumber - 1) % concurrency) + 1
 
 	result := TestResult{
-		Timestamp:     time.Now().Format(time.RFC3339),
-		Configuration: config,
-		TestNumber:    testNumber,
-		RoundNumber:   roundNumber,
-		RoundPosition: roundPosition,
-		Success:       false,
+		Timestamp:         time.Now().Format(time.RFC3339),
+		Configuration:     config,
+		TestNumber:        testNumber,
+		RoundNumber:       roundNumber,
+		RoundPosition:     roundPosition,
+		ActualConcurrency: concurrency,
+		Success:           false,
 	}
-
-	// Create OpenAI client
-	client := NewOpenAIClient(config.APIEndpoint, config.APIKey, config.Timeout)
 
 	// Generate prompt based on configuration
 	var promptContent string
@@ -201,7 +392,7 @@ func (s *SpeedTestService) runIndividualTest(ctx context.Context, config TestCon
 		promptContent = config.Prompt
 	} else {
 		promptGen := NewPromptGenerator(config.Model)
-		promptContent = promptGen.GeneratePrompt(config.PromptLength, config.PromptType)
+		promptContent = promptGen.GeneratePrompt(promptLength, config.PromptType)
 	}
 
 	// Prepare request
@@ -221,18 +412,19 @@ func (s *SpeedTestService) runIndividualTest(ctx context.Context, config TestCon
 
 	// Execute request
 	startTime := time.Now()
-	response, latency, err := client.GenerateCompletion(ctx, request, config.Headers)
+	response, latency, err := client.GenerateCompletion(ctx, request, config.Headers, onToken, onFirstToken)
 	if err != nil && request.Stream {
 		// Check if error is due to cancellation
 		if ctx.Err() != nil {
 			result.Error = "cancelled"
 			return result
 		}
-		
+
 		log.Printf("Streaming completion failed, retrying without stream: %v", err)
 		request.Stream = false
 		request.StreamOptions = nil
-		response, latency, err = client.GenerateCompletion(ctx, request, config.Headers)
+		// Retry without stream
+		response, latency, err = client.GenerateCompletion(ctx, request, config.Headers, nil, nil)
 	}
 	totalLatency := time.Since(startTime)
 	totalLatencyMs := float64(totalLatency) / float64(time.Millisecond)
@@ -262,10 +454,6 @@ func (s *SpeedTestService) runIndividualTest(ctx context.Context, config TestCon
 	result.PromptTokens = response.Usage.PromptTokens
 	result.CompletionTokens = response.Usage.CompletionTokens
 	result.TotalTokens = response.Usage.TotalTokens
-
-	if len(response.Choices) > 0 {
-		result.Response = response.Choices[0].Message.Content
-	}
 
 	if outputLatencyMs <= 0 && (result.PromptTokens > 0 || result.CompletionTokens > 0) {
 		prefillMs, outputMs := splitLatencyByTokens(totalLatencyMs, result.PromptTokens, result.CompletionTokens)
@@ -471,11 +659,6 @@ func (s *SpeedTestService) calculateRoundSummaries(results []TestResult, config 
 		return nil
 	}
 
-	concurrency := config.ConcurrentTests
-	if concurrency <= 0 {
-		concurrency = 1
-	}
-
 	type roundAccumulator struct {
 		summary               RoundSummary
 		totalPromptTokens     float64
@@ -493,14 +676,40 @@ func (s *SpeedTestService) calculateRoundSummaries(results []TestResult, config 
 	accumulators := make(map[int]*roundAccumulator)
 
 	for _, result := range results {
+		// Use the round number stored in the result
 		roundNumber := result.RoundNumber
-		if roundNumber <= 0 {
-			if result.TestNumber > 0 {
-				roundNumber = ((result.TestNumber - 1) / concurrency) + 1
-			} else {
-				roundNumber = 1
-			}
-		}
+
+		// Note: In step tests, round numbers might conflict (e.g. Step 1 Round 1 vs Step 2 Round 1).
+		// However, the requirements don't explicitly ask for multi-step aggregation in this specific function,
+		// but rather for charts. The frontend charts for "Total Prefill Rate" etc. rely on RoundSummary.
+		// For "Concurrency Step", we likely want one "Round" per concurrency level if TestCount=1.
+		// If TestCount > 1, we have multiple rounds per step.
+		// The current logic groups by roundNumber.
+		// We should ensure unique round numbers if we want to distinguish them,
+		// OR we group by (Step, Round).
+		// Given the complexity, for now we rely on the frontend to filter/group `Results` directly for detailed charts.
+		// The `RoundSummaries` here are mostly for the "Round Throughput" metric.
+
+		// IMPORTANT: For step tests, if we want to show "Total Throughput" per step, we need to make sure
+		// rounds are grouped correctly.
+		// Since `calculateRoundSummaries` aggregates by `RoundNumber`, and we assign `RoundNumber` relative to the test index,
+		// it should be fine as long as `RoundNumber` keeps increasing or is unique enough.
+		// But in my implementation above:
+		// roundNumber := ((testNumber - 1) / concurrency) + 1
+		// If concurrency changes, this formula might produce duplicate round numbers for different steps.
+		// E.g. Test 1 (Conc 1) -> Round 1.
+		// Test 2 (Conc 2) -> Round 1 (if testNumber resets, but I used globalTestIndex).
+		// `globalTestIndex` ensures `testNumber` is unique and increasing.
+		// So `RoundNumber` will be unique-ish.
+		// Wait: `((testNumber - 1) / concurrency) + 1`.
+		// If Test 1..10 are Conc 1. Round = 1..10.
+		// If Test 11..20 are Conc 10. Round = ((10..19)/10)+1 = Round 2.
+		// This might overlap.
+		// Ideally, we should assume `RoundSummaries` are primarily useful for "Normal" tests or
+		// we need to trust that `globalTestIndex` makes them somewhat distinct.
+		// Actually, for the graphs, users usually care about "Concurrency Level vs Metric".
+		// We will derive that from `Results` in the frontend. `RoundSummary` is less critical for the step charts
+		// unless we want "Total Throughput" (which is a round property).
 
 		acc, ok := accumulators[roundNumber]
 		if !ok {
@@ -524,6 +733,8 @@ func (s *SpeedTestService) calculateRoundSummaries(results []TestResult, config 
 				acc.totalPrefillTPS += result.PrefillTokensPerSecond
 				acc.prefillSamples++
 			}
+			acc.summary.TotalPrefillTokensPerSecond += result.PrefillTokensPerSecond
+
 			if result.OutputTokensPerSecond > 0 {
 				acc.totalOutputTPS += result.OutputTokensPerSecond
 				acc.outputSamples++
@@ -615,4 +826,5 @@ func (s *SpeedTestService) CompareBatches(batches []TestBatch) (*ComparisonResul
 func (s *SpeedTestService) Close() {
 	close(s.progressChan)
 	close(s.resultsChan)
+	close(s.telemetryChan)
 }

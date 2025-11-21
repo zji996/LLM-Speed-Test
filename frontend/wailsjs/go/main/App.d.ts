@@ -18,6 +18,8 @@ export function GetExportDirectory():Promise<string>;
 
 export function GetPromptTypes():Promise<Array<string>>;
 
+export function GetTelemetryUpdates():Promise<Array<main.TelemetryUpdate>>;
+
 export function GetTestBatch(arg1:string):Promise<main.TestBatch>;
 
 export function GetTestProgress():Promise<Array<main.ProgressUpdate>>;

@@ -4,6 +4,7 @@ export function StartSpeedTest(arg1:TestConfiguration):Promise<TestBatch>;
 export function StopSpeedTest(arg1:string):Promise<void>;
 export function GetTestProgress():Promise<Array<ProgressUpdate>>;
 export function GetTestResults():Promise<Array<TestResult>>;
+export function GetTelemetryUpdates():Promise<Array<TelemetryUpdate>>;
 export function GetTestBatch(arg1:string):Promise<TestBatch>;
 export function GetAllTestBatches():Promise<Array<TestBatch>>;
 export function CompareTestBatches(arg1:Array<string>):Promise<ComparisonResult>;

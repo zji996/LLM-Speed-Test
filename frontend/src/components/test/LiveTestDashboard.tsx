@@ -1,11 +1,14 @@
 import React, { useMemo } from 'react';
-import { TestResult } from '../../types';
+import { TestResult, TelemetryUpdate } from '../../types';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import Card from '../common/Card';
+import { MAX_LIVE_CHART_POINTS } from '../../utils/constants';
+import RealTimeMonitor from './RealTimeMonitor';
 
 interface LiveTestDashboardProps {
   isRunning: boolean;
   results: TestResult[];
+  telemetry?: TelemetryUpdate[];
   totalTests: number;
   completedCount: number;
 }
@@ -13,22 +16,33 @@ interface LiveTestDashboardProps {
 const LiveTestDashboard: React.FC<LiveTestDashboardProps> = ({
   isRunning,
   results,
+  telemetry,
   totalTests,
   completedCount
 }) => {
   // Calculate real-time metrics
   const currentTPS = useMemo(() => {
+    if (telemetry && telemetry.length > 0) {
+        return telemetry[telemetry.length - 1].instantTPS;
+    }
     if (results.length === 0) return 0;
     const recent = results.slice(-5);
     const sum = recent.reduce((acc, r) => acc + (r.outputTokensPerSecond || 0), 0);
     return sum / recent.length;
-  }, [results]);
+  }, [results, telemetry]);
 
   const averageLatency = useMemo(() => {
+    if (telemetry && telemetry.length > 0) {
+        const latest = telemetry[telemetry.length - 1];
+        // Note: Telemetry has TTFT (avg), but results has Total Latency. 
+        // We should probably stick to results for "Total Latency Avg" as TTFT is different.
+        // But RealTimeMonitor shows TTFT. 
+        // Let's keep this card showing Total Latency from results, as it is "Average Latency" (usually implies total).
+    }
     if (results.length === 0) return 0;
     const sum = results.reduce((acc, r) => acc + (r.totalLatency || 0), 0);
     return sum / results.length;
-  }, [results]);
+  }, [results, telemetry]);
 
   const successRate = useMemo(() => {
     if (results.length === 0) return 100;
@@ -37,8 +51,9 @@ const LiveTestDashboard: React.FC<LiveTestDashboardProps> = ({
   }, [results]);
 
   const chartData = useMemo(() => {
-    return results.map((r, i) => ({
-      id: i + 1,
+    const startIdx = Math.max(0, results.length - MAX_LIVE_CHART_POINTS);
+    return results.slice(-MAX_LIVE_CHART_POINTS).map((r, i) => ({
+      id: startIdx + i + 1,
       tps: r.outputTokensPerSecond || 0,
       latency: r.totalLatency || 0
     }));
@@ -46,8 +61,13 @@ const LiveTestDashboard: React.FC<LiveTestDashboardProps> = ({
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {telemetry && telemetry.length > 0 && (
+          <RealTimeMonitor history={telemetry} />
+      )}
+
+      {!telemetry && (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* TPS Gauge */}
+        {/* TPS Gauge - Only show if no telemetry, otherwise RealTimeMonitor handles it */}
         <Card className="relative overflow-hidden">
           <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-[var(--color-primary)] opacity-20 blur-3xl rounded-full animate-pulse"></div>
           <div className="relative z-10 text-center py-4">
@@ -59,7 +79,7 @@ const LiveTestDashboard: React.FC<LiveTestDashboardProps> = ({
           </div>
         </Card>
 
-        {/* Progress */}
+        {/* Progress - Only show if no telemetry */}
         <Card className="relative overflow-hidden">
           <div className="absolute top-0 left-0 -mt-4 -ml-4 w-24 h-24 bg-[var(--color-secondary)] opacity-20 blur-3xl rounded-full"></div>
           <div className="relative z-10 flex flex-col items-center justify-center h-full py-2">
@@ -96,8 +116,9 @@ const LiveTestDashboard: React.FC<LiveTestDashboardProps> = ({
            </div>
         </Card>
       </div>
+      )}
 
-      {/* Real-time Chart */}
+      {/* Legacy Real-time Chart based on Results (still useful for individual request analysis) */}
       <Card className="h-80 p-0 overflow-hidden flex flex-col">
         <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center bg-white/5">
           <h3 className="text-white font-semibold flex items-center gap-2">

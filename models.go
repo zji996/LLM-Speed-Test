@@ -13,10 +13,22 @@ type TestConfiguration struct {
 	TopP             float32           `json:"topP"`
 	PresencePenalty  float32           `json:"presencePenalty"`
 	FrequencyPenalty float32           `json:"frequencyPenalty"`
-	TestCount        int               `json:"testCount"`       // Number of submission rounds
-	ConcurrentTests  int               `json:"concurrentTests"` // Requests per round (also concurrency limit)
+	
+	// Test Mode Configuration
+	TestMode   string            `json:"testMode"`   // "normal", "concurrency_step", "input_step"
+	StepConfig StepConfiguration `json:"stepConfig"` // Configuration for step tests
+
+	TestCount        int               `json:"testCount"`       // Number of submission rounds (per step)
+	ConcurrentTests  int               `json:"concurrentTests"` // Requests per round (base or fixed)
 	Timeout          int               `json:"timeout"`         // in seconds
 	Headers          map[string]string `json:"headers,omitempty"`
+}
+
+// StepConfiguration defines parameters for step-based tests
+type StepConfiguration struct {
+	Start int `json:"start"`
+	End   int `json:"end"`
+	Step  int `json:"step"`
 }
 
 // TestResult represents the result of a single LLM speed test
@@ -27,6 +39,7 @@ type TestResult struct {
 	TestNumber             int               `json:"testNumber"`
 	RoundNumber            int               `json:"roundNumber"`
 	RoundPosition          int               `json:"roundPosition"`
+	ActualConcurrency      int               `json:"actualConcurrency"` // The concurrency level for this specific result
 	PromptTokens           int               `json:"promptTokens"`
 	CompletionTokens       int               `json:"completionTokens"`
 	TotalTokens            int               `json:"totalTokens"`
@@ -95,6 +108,7 @@ type RoundSummary struct {
 	AverageOutputLatency          float64 `json:"averageOutputLatency"`
 	AverageTotalLatency           float64 `json:"averageTotalLatency"`
 	AveragePrefillTokensPerSecond float64 `json:"averagePrefillTokensPerSecond"`
+	TotalPrefillTokensPerSecond   float64 `json:"totalPrefillTokensPerSecond"`
 	AverageOutputTokensPerSecond  float64 `json:"averageOutputTokensPerSecond"`
 	TotalOutputTokensPerSecond    float64 `json:"totalOutputTokensPerSecond"`
 }
@@ -107,6 +121,20 @@ type ProgressUpdate struct {
 	TotalTests int    `json:"totalTests"`
 	Status     string `json:"status"` // "running", "completed", "failed"
 	Message    string `json:"message,omitempty"`
+}
+
+// TelemetryUpdate represents real-time telemetry data during test execution
+type TelemetryUpdate struct {
+	Timestamp            int64   `json:"timestamp"`            // Unix timestamp in ms
+	ActiveTests          int     `json:"activeTests"`          // Current number of active requests
+	CompletedTests       int     `json:"completedTests"`       // Number of completed requests
+	TotalTests           int     `json:"totalTests"`           // Total expected requests
+	GeneratedTokens      int64   `json:"generatedTokens"`      // Total tokens generated so far
+	InstantTPS           float64 `json:"instantTPS"`           // Instantaneous tokens per second
+	AverageTTFT          float64 `json:"averageTTFT"`          // Average Time To First Token (ms)
+	P95TTFT              float64 `json:"p95TTFT"`              // 95th percentile TTFT (ms)
+	StepCurrent          int     `json:"stepCurrent"`          // Current step index (for step tests)
+	StepTotal            int     `json:"stepTotal"`            // Total steps (for step tests)
 }
 
 // ComparisonRequest represents a request to compare multiple test batches

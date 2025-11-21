@@ -1,3 +1,11 @@
+export type TestMode = 'normal' | 'concurrency_step' | 'input_step';
+
+export interface StepConfiguration {
+  start: number;
+  end: number;
+  step: number;
+}
+
 export interface TestConfiguration {
   apiEndpoint: string;
   apiKey: string;
@@ -10,6 +18,11 @@ export interface TestConfiguration {
   topP: number;
   presencePenalty: number;
   frequencyPenalty: number;
+  
+  // Test Mode
+  testMode: TestMode;
+  stepConfig: StepConfiguration;
+
   testCount: number;       // Number of submission rounds
   concurrentTests: number; // Requests per round (concurrency limit)
   timeout: number;
@@ -23,6 +36,7 @@ export interface TestResult {
   testNumber: number;
   roundNumber: number;
   roundPosition: number;
+  actualConcurrency: number;
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
@@ -99,4 +113,17 @@ export interface TestStatus {
   totalTests: number;
   status: string;
   error?: string;
+}
+
+export interface TelemetryUpdate {
+  timestamp: number;
+  activeTests: number;
+  completedTests: number;
+  totalTests: number;
+  generatedTokens: number;
+  instantTPS: number;
+  averageTTFT: number;
+  p95TTFT: number;
+  stepCurrent: number;
+  stepTotal: number;
 }

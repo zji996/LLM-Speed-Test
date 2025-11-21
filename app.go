@@ -8,14 +8,17 @@ import (
 	"github.com/google/uuid"
 )
 
+const maxStoredBatches = 50
+
 // App struct
 type App struct {
-	ctx              context.Context
-	speedTestService *SpeedTestService
-	exportService    *ExportService
-	activeTests      map[string]*TestBatch
-	cancelFuncs      map[string]context.CancelFunc
-	mu               sync.RWMutex
+	ctx               context.Context
+	speedTestService  *SpeedTestService
+	exportService     *ExportService
+	activeTests       map[string]*TestBatch
+	cancelFuncs       map[string]context.CancelFunc
+	completedBatchIDs []string
+	mu                sync.RWMutex
 }
 
 // NewApp creates a new App application struct
@@ -73,7 +76,7 @@ func (a *App) StartSpeedTest(config TestConfiguration) (*TestBatch, error) {
 		}
 
 		a.mu.Lock()
-		a.activeTests[batch.ID] = batch
+		a.addCompletedBatchLocked(batch)
 		a.mu.Unlock()
 	}()
 
@@ -95,9 +98,9 @@ func (a *App) StopSpeedTest(batchID string) error {
 		delete(a.cancelFuncs, batchID)
 		return nil
 	}
-	
+
 	// If no specific batch ID is provided or found, try to stop the most recent one?
-	// The UI currently might not track the ID perfectly for stopping. 
+	// The UI currently might not track the ID perfectly for stopping.
 	// Let's handle the case where batchID might be empty (stop all).
 	if batchID == "" && len(a.cancelFuncs) > 0 {
 		for id, cancel := range a.cancelFuncs {
@@ -142,6 +145,22 @@ func (a *App) GetTestResults() ([]TestResult, error) {
 	}
 }
 
+// GetTelemetryUpdates retrieves the latest telemetry updates
+func (a *App) GetTelemetryUpdates() ([]TelemetryUpdate, error) {
+	updates := make([]TelemetryUpdate, 0)
+
+	// Collect updates from the channel
+	for {
+		select {
+		case update := <-a.speedTestService.GetTelemetryChannel():
+			updates = append(updates, update)
+		default:
+			// No more updates available
+			return updates, nil
+		}
+	}
+}
+
 // GetTestBatch retrieves a completed test batch by ID
 func (a *App) GetTestBatch(batchID string) (*TestBatch, error) {
 	a.mu.RLock()
@@ -159,9 +178,14 @@ func (a *App) GetAllTestBatches() ([]TestBatch, error) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 
-	batches := make([]TestBatch, 0, len(a.activeTests))
-	for _, batch := range a.activeTests {
-		batches = append(batches, *batch)
+	// Preserve insertion order of completed batches so the
+	// frontend sees a stable, recent history instead of a
+	// map's random iteration order.
+	batches := make([]TestBatch, 0, len(a.completedBatchIDs))
+	for _, id := range a.completedBatchIDs {
+		if batch, exists := a.activeTests[id]; exists {
+			batches = append(batches, *batch)
+		}
 	}
 
 	return batches, nil
@@ -224,7 +248,7 @@ func (a *App) GetDefaultTestConfiguration() TestConfiguration {
 		TopP:             0.1,
 		PresencePenalty:  -1.0,
 		FrequencyPenalty: -1.0,
-		TestCount:        10,
+		TestCount:        2,
 		ConcurrentTests:  3,
 		Timeout:          60,
 		Headers:          make(map[string]string),
@@ -246,6 +270,40 @@ func (a *App) ValidatePromptConfig(promptType string, promptLength int) error {
 	return ValidatePromptConfig(promptType, promptLength)
 }
 
+// addCompletedBatchLocked adds a completed batch to the in-memory store
+// and enforces an upper bound on how many batches we retain to avoid
+// unbounded memory growth over a long-running session.
+// Caller must hold a.mu.Lock().
+func (a *App) addCompletedBatchLocked(batch *TestBatch) {
+	if batch == nil || batch.ID == "" {
+		return
+	}
+
+	// Only append to the ordered list if this is a new batch ID.
+	if _, exists := a.activeTests[batch.ID]; !exists {
+		a.completedBatchIDs = append(a.completedBatchIDs, batch.ID)
+	}
+
+	a.activeTests[batch.ID] = batch
+
+	if len(a.completedBatchIDs) <= maxStoredBatches {
+		return
+	}
+
+	// Drop oldest batches beyond the retention window.
+	overflow := len(a.completedBatchIDs) - maxStoredBatches
+	toRemove := a.completedBatchIDs[:overflow]
+	a.completedBatchIDs = a.completedBatchIDs[overflow:]
+
+	for _, id := range toRemove {
+		// Do not delete the just-added batch if IDs somehow overlap.
+		if id == batch.ID {
+			continue
+		}
+		delete(a.activeTests, id)
+	}
+}
+
 // domReady is called after front-end resources have been loaded
 func (a *App) domReady(ctx context.Context) {
 	// Add your action here
@@ -260,6 +318,14 @@ func (a *App) beforeClose(ctx context.Context) (prevent bool) {
 
 // Shutdown performs cleanup when the app is shutting down
 func (a *App) Shutdown() {
+	// Cancel any running tests so goroutines and HTTP requests can exit.
+	a.mu.Lock()
+	for id, cancel := range a.cancelFuncs {
+		cancel()
+		delete(a.cancelFuncs, id)
+	}
+	a.mu.Unlock()
+
 	if a.speedTestService != nil {
 		a.speedTestService.Close()
 	}

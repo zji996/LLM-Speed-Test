@@ -91,6 +91,7 @@ export namespace main {
 	    averageOutputLatency: number;
 	    averageTotalLatency: number;
 	    averagePrefillTokensPerSecond: number;
+	    totalPrefillTokensPerSecond: number;
 	    averageOutputTokensPerSecond: number;
 	    totalOutputTokensPerSecond: number;
 	
@@ -112,6 +113,7 @@ export namespace main {
 	        this.averageOutputLatency = source["averageOutputLatency"];
 	        this.averageTotalLatency = source["averageTotalLatency"];
 	        this.averagePrefillTokensPerSecond = source["averagePrefillTokensPerSecond"];
+	        this.totalPrefillTokensPerSecond = source["totalPrefillTokensPerSecond"];
 	        this.averageOutputTokensPerSecond = source["averageOutputTokensPerSecond"];
 	        this.totalOutputTokensPerSecond = source["totalOutputTokensPerSecond"];
 	    }
@@ -123,6 +125,7 @@ export namespace main {
 	    testNumber: number;
 	    roundNumber: number;
 	    roundPosition: number;
+	    actualConcurrency: number;
 	    promptTokens: number;
 	    completionTokens: number;
 	    totalTokens: number;
@@ -148,6 +151,7 @@ export namespace main {
 	        this.testNumber = source["testNumber"];
 	        this.roundNumber = source["roundNumber"];
 	        this.roundPosition = source["roundPosition"];
+	        this.actualConcurrency = source["actualConcurrency"];
 	        this.promptTokens = source["promptTokens"];
 	        this.completionTokens = source["completionTokens"];
 	        this.totalTokens = source["totalTokens"];
@@ -180,6 +184,22 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class StepConfiguration {
+	    start: number;
+	    end: number;
+	    step: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new StepConfiguration(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.start = source["start"];
+	        this.end = source["end"];
+	        this.step = source["step"];
+	    }
+	}
 	export class TestConfiguration {
 	    apiEndpoint: string;
 	    apiKey: string;
@@ -192,6 +212,8 @@ export namespace main {
 	    topP: number;
 	    presencePenalty: number;
 	    frequencyPenalty: number;
+	    testMode: string;
+	    stepConfig: StepConfiguration;
 	    testCount: number;
 	    concurrentTests: number;
 	    timeout: number;
@@ -214,11 +236,31 @@ export namespace main {
 	        this.topP = source["topP"];
 	        this.presencePenalty = source["presencePenalty"];
 	        this.frequencyPenalty = source["frequencyPenalty"];
+	        this.testMode = source["testMode"];
+	        this.stepConfig = this.convertValues(source["stepConfig"], StepConfiguration);
 	        this.testCount = source["testCount"];
 	        this.concurrentTests = source["concurrentTests"];
 	        this.timeout = source["timeout"];
 	        this.headers = source["headers"];
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class TestBatch {
 	    id: string;
@@ -334,6 +376,37 @@ export namespace main {
 	    }
 	}
 	
+	
+	export class TelemetryUpdate {
+	    timestamp: number;
+	    activeTests: number;
+	    completedTests: number;
+	    totalTests: number;
+	    generatedTokens: number;
+	    instantTPS: number;
+	    averageTTFT: number;
+	    p95TTFT: number;
+	    stepCurrent: number;
+	    stepTotal: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TelemetryUpdate(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.timestamp = source["timestamp"];
+	        this.activeTests = source["activeTests"];
+	        this.completedTests = source["completedTests"];
+	        this.totalTests = source["totalTests"];
+	        this.generatedTokens = source["generatedTokens"];
+	        this.instantTPS = source["instantTPS"];
+	        this.averageTTFT = source["averageTTFT"];
+	        this.p95TTFT = source["p95TTFT"];
+	        this.stepCurrent = source["stepCurrent"];
+	        this.stepTotal = source["stepTotal"];
+	    }
+	}
 	
 	
 	

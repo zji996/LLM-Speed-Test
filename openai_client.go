@@ -82,7 +82,9 @@ func NewOpenAIClient(apiEndpoint, apiKey string, timeout int) *OpenAIClient {
 }
 
 // GenerateCompletion generates a completion using the OpenAI API
-func (c *OpenAIClient) GenerateCompletion(ctx context.Context, request OpenAIRequest, headers map[string]string) (*OpenAIResponse, time.Duration, error) {
+// onToken is called when a new token is received (stream mode only)
+// onFirstToken is called when the first token is received with the TTFT duration (stream mode only)
+func (c *OpenAIClient) GenerateCompletion(ctx context.Context, request OpenAIRequest, headers map[string]string, onToken func(string), onFirstToken func(time.Duration)) (*OpenAIResponse, time.Duration, error) {
 	requestURL := fmt.Sprintf("%s/chat/completions", c.apiEndpoint)
 
 	jsonData, err := json.Marshal(request)
@@ -117,7 +119,7 @@ func (c *OpenAIClient) GenerateCompletion(ctx context.Context, request OpenAIReq
 	}
 
 	if request.Stream && strings.Contains(resp.Header.Get("Content-Type"), "text/event-stream") {
-		return c.handleStreamingResponse(resp, startTime)
+		return c.handleStreamingResponse(resp, startTime, onToken, onFirstToken)
 	}
 
 	defer resp.Body.Close()
@@ -154,7 +156,7 @@ type streamResponse struct {
 	Usage   *Usage         `json:"usage,omitempty"`
 }
 
-func (c *OpenAIClient) handleStreamingResponse(resp *http.Response, startTime time.Time) (*OpenAIResponse, time.Duration, error) {
+func (c *OpenAIClient) handleStreamingResponse(resp *http.Response, startTime time.Time, onToken func(string), onFirstToken func(time.Duration)) (*OpenAIResponse, time.Duration, error) {
 	reader := bufio.NewReader(resp.Body)
 	defer resp.Body.Close()
 
@@ -208,10 +210,21 @@ func (c *OpenAIClient) handleStreamingResponse(resp *http.Response, startTime ti
 			delta := chunk.Choices[0].Delta
 			if delta.Content != "" {
 				builder.WriteString(delta.Content)
+				
+				// Call onToken callback
+				if onToken != nil {
+					onToken(delta.Content)
+				}
 			}
-			if ttft == 0 {
+			
+			// Calculate TTFT on first content received
+			if ttft == 0 && delta.Content != "" {
 				ttft = time.Since(startTime)
+				if onFirstToken != nil {
+					onFirstToken(ttft)
+				}
 			}
+			
 			if chunk.Choices[0].FinishReason != "" {
 				finishReason = chunk.Choices[0].FinishReason
 			}
@@ -320,7 +333,7 @@ func (c *OpenAIClient) GetModels(headers map[string]string) ([]string, error) {
 	return models, nil
 }
 
-	// ValidateAPIKey validates the API key by making a simple request
+// ValidateAPIKey validates the API key by making a simple request
 func (c *OpenAIClient) ValidateAPIKey() error {
 	// First try to get available models to validate the API key
 	models, err := c.GetModels(nil)
@@ -341,6 +354,6 @@ func (c *OpenAIClient) ValidateAPIKey() error {
 		MaxTokens: 1,
 	}
 
-	_, _, err = c.GenerateCompletion(context.Background(), request, nil)
+	_, _, err = c.GenerateCompletion(context.Background(), request, nil, nil, nil)
 	return err
 }

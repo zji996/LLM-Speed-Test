@@ -1,14 +1,19 @@
 import React, { useMemo, useState } from 'react';
 import { ExportFormat, ExportOptions, TestBatch } from '../../types';
 import ResultsChart from './ResultsChart';
+import StepPerformanceChart from './StepPerformanceChart';
 import { Button, Card, Select } from '../common';
+
+type ChartsMode = 'single' | 'auto';
 
 interface PerformanceChartsProps {
   batch: TestBatch;
   onExport: (format: ExportFormat, options?: ExportOptions) => Promise<void> | void;
+  mode?: ChartsMode;
+  allBatches?: TestBatch[];
 }
 
-const PerformanceCharts: React.FC<PerformanceChartsProps> = ({ batch, onExport }) => {
+const PerformanceCharts: React.FC<PerformanceChartsProps> = ({ batch, onExport, mode = 'single', allBatches }) => {
   const [exportFormat, setExportFormat] = useState<ExportFormat>('png');
   const [isExporting, setIsExporting] = useState(false);
 
@@ -16,6 +21,8 @@ const PerformanceCharts: React.FC<PerformanceChartsProps> = ({ batch, onExport }
   const successRate = totalTests > 0
     ? ((batch.summary.successfulTests / totalTests) * 100).toFixed(1)
     : '0.0';
+
+  const isStepTest = batch.configuration.testMode === 'concurrency_step' || batch.configuration.testMode === 'input_step';
 
   const infoBadges = useMemo(() => ([
     {
@@ -66,9 +73,13 @@ const PerformanceCharts: React.FC<PerformanceChartsProps> = ({ batch, onExport }
                 </span>
               ))}
             </div>
-            <h2 className="text-2xl font-bold text-white">性能图表可视化</h2>
+            <h2 className="text-2xl font-bold text-white">
+              {isStepTest ? '步进测试性能图表' : '性能图表可视化'}
+            </h2>
             <p className="text-sm text-gray-400 max-w-2xl">
-               通过多维度图表分析测试批次的性能特征。所有的图表均支持高分辨率导出。
+              {isStepTest
+                ? '针对步进测试，重点观察不同配置（并发/长度）下的吞吐与延迟变化。'
+                : '通过多维度图表分析单次测试批次的性能特征。所有的图表均支持高分辨率导出。'}
             </p>
           </div>
           
@@ -90,12 +101,17 @@ const PerformanceCharts: React.FC<PerformanceChartsProps> = ({ batch, onExport }
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6">
-        <ResultsChart batch={batch} chartType="latency" />
-        <ResultsChart batch={batch} chartType="throughput" />
-      </div>
-
-      <ResultsChart batch={batch} chartType="roundThroughput" />
+      {isStepTest ? (
+        <StepPerformanceChart batch={batch} />
+      ) : (
+        <>
+          <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6">
+            <ResultsChart batch={batch} chartType="latency" />
+            <ResultsChart batch={batch} chartType="throughput" />
+          </div>
+          <ResultsChart batch={batch} chartType="roundThroughput" />
+        </>
+      )}
     </div>
   );
 };

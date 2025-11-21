@@ -1,19 +1,24 @@
 import React, { useMemo, useState } from 'react';
 import { TestBatch, ExportFormat, ExportOptions, RoundSummary } from '../../types';
 import { computeRoundSummaries } from '../../utils/roundSummary';
-import ConcurrencyComparisonChart from './ConcurrencyComparisonChart';
+import StepPerformanceChart from './StepPerformanceChart';
 import { Button, Card, Select } from '../common';
+
+type ResultsMode = 'single' | 'auto';
 
 interface ResultsDashboardProps {
   batch: TestBatch;
   allBatches?: TestBatch[];
+  mode?: ResultsMode;
   onExport: (format: ExportFormat, options?: ExportOptions) => Promise<void> | void;
 }
 
-const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ batch, allBatches, onExport }) => {
+const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ batch, allBatches, mode = 'single', onExport }) => {
   const [exportFormat, setExportFormat] = useState<ExportFormat>('csv');
   const [isExporting, setIsExporting] = useState(false);
   const roundSummaries = useMemo<RoundSummary[]>(() => computeRoundSummaries(batch), [batch]);
+
+  const isStepTest = batch.configuration.testMode === 'concurrency_step' || batch.configuration.testMode === 'input_step';
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -61,16 +66,24 @@ const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ batch, allBatches, 
            测试结果分析
         </h1>
         <p className="text-gray-400">详细的性能测试报告与指标分析</p>
+        <div className="text-sm text-gray-500 mt-1">
+           Mode: <span className="text-white font-semibold uppercase">{batch.configuration.testMode}</span>
+           {isStepTest && (
+             <span className="ml-2">
+                (Range: {batch.configuration.stepConfig.start}-{batch.configuration.stepConfig.end}, Step: {batch.configuration.stepConfig.step})
+             </span>
+           )}
+        </div>
       </div>
 
-      {/* Concurrency Comparison Chart */}
-      {allBatches && allBatches.length > 0 && (
+      {/* Step Performance Charts (Only for Step Modes) */}
+      {isStepTest && (
         <div className="animate-fade-in">
-           <ConcurrencyComparisonChart batches={allBatches} />
+           <StepPerformanceChart batch={batch} />
         </div>
       )}
 
-      {/* Summary Cards */}
+      {/* Summary Cards - Always visible as aggregate stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card className="bg-white/5 border border-white/10">
           <div className="text-[var(--color-primary)] text-xs font-bold uppercase tracking-wider">总测试数</div>
@@ -97,72 +110,8 @@ const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ batch, allBatches, 
         </Card>
       </div>
 
-      {/* Detailed Metrics - Split into TTFT and Output */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-         {/* TTFT */}
-         <Card 
-           header={
-             <div className="flex items-center text-[var(--color-primary)] font-semibold">
-               <span className="w-2 h-2 rounded-full bg-[var(--color-primary)] mr-2 shadow-[0_0_10px_var(--color-primary)]"></span>
-               预填充阶段 (TTFT)
-             </div>
-           }
-         >
-            <div className="space-y-4">
-              <div className="flex justify-between items-center p-3 rounded-lg bg-white/5 border border-white/5">
-                 <span className="text-sm text-gray-400">平均首Token耗时</span>
-                 <span className="text-xl font-mono font-bold text-white">{formatDuration(batch.summary.averagePrefillLatency)}</span>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                 <div className="p-3 rounded-lg bg-white/5">
-                    <div className="text-xs text-gray-500 mb-1">最小耗时</div>
-                    <div className="font-mono text-[var(--color-success)]">{formatDuration(batch.summary.minPrefillLatency)}</div>
-                 </div>
-                 <div className="p-3 rounded-lg bg-white/5">
-                    <div className="text-xs text-gray-500 mb-1">最大耗时</div>
-                    <div className="font-mono text-[var(--color-warning)]">{formatDuration(batch.summary.maxPrefillLatency)}</div>
-                 </div>
-              </div>
-              <div className="flex justify-between items-center p-3 rounded-lg bg-white/5 border border-white/5">
-                 <span className="text-sm text-gray-400">平均处理速度</span>
-                 <span className="text-lg font-mono font-bold text-[var(--color-primary)]">{formatRate(batch.summary.averagePrefillTokensPerSecond)} <span className="text-xs text-gray-500">T/s</span></span>
-              </div>
-            </div>
-         </Card>
-
-         {/* Output */}
-         <Card 
-           header={
-             <div className="flex items-center text-[var(--color-secondary)] font-semibold">
-               <span className="w-2 h-2 rounded-full bg-[var(--color-secondary)] mr-2 shadow-[0_0_10px_var(--color-secondary)]"></span>
-               输出阶段 (Decode)
-             </div>
-           }
-         >
-            <div className="space-y-4">
-              <div className="flex justify-between items-center p-3 rounded-lg bg-white/5 border border-white/5">
-                 <span className="text-sm text-gray-400">平均输出耗时</span>
-                 <span className="text-xl font-mono font-bold text-white">{formatDuration(batch.summary.averageOutputLatency)}</span>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                 <div className="p-3 rounded-lg bg-white/5">
-                    <div className="text-xs text-gray-500 mb-1">最小耗时</div>
-                    <div className="font-mono text-[var(--color-success)]">{formatDuration(batch.summary.minOutputLatency)}</div>
-                 </div>
-                 <div className="p-3 rounded-lg bg-white/5">
-                    <div className="text-xs text-gray-500 mb-1">最大耗时</div>
-                    <div className="font-mono text-[var(--color-warning)]">{formatDuration(batch.summary.maxOutputLatency)}</div>
-                 </div>
-              </div>
-              <div className="flex justify-between items-center p-3 rounded-lg bg-white/5 border border-white/5">
-                 <span className="text-sm text-gray-400">平均生成速度</span>
-                 <span className="text-lg font-mono font-bold text-[var(--color-secondary)]">{formatRate(batch.summary.averageOutputTokensPerSecond)} <span className="text-xs text-gray-500">T/s</span></span>
-              </div>
-            </div>
-         </Card>
-      </div>
-
       {/* Round Details Table */}
+      {/* For step tests, showing every round might be too much if steps are large. But it's still useful data. */}
       <Card
         header={
           <div className="flex items-center justify-between">
@@ -170,19 +119,19 @@ const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ batch, allBatches, 
               <svg className="w-5 h-5 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
               </svg>
-              轮次详细数据
+              {isStepTest ? '步骤/轮次详细数据' : '轮次详细数据'}
             </div>
             <div className="text-xs text-gray-500 font-mono">
-              {batch.configuration.testCount} Rounds × {batch.configuration.concurrentTests} Concurrency
+               {isStepTest ? 'Detailed Step Breakdown' : `${batch.configuration.testCount} Rounds × ${batch.configuration.concurrentTests} Concurrency`}
             </div>
           </div>
         }
         className="overflow-hidden"
       >
-        <div className="overflow-x-auto -mx-6 -my-6">
+        <div className="overflow-x-auto -mx-6 -my-6 max-h-[500px]">
            <table className="w-full text-left border-collapse">
-             <thead>
-               <tr className="border-b border-white/10 bg-white/5 text-xs uppercase tracking-wider text-gray-400">
+             <thead className="sticky top-0 z-10 shadow-md">
+               <tr className="border-b border-white/10 bg-[#111] text-xs uppercase tracking-wider text-gray-400">
                  <th className="px-6 py-4 font-medium">轮次</th>
                  <th className="px-6 py-4 font-medium">Tokens (Prompt/Out)</th>
                  <th className="px-6 py-4 font-medium">延迟 (TTFT/Total)</th>
@@ -190,7 +139,7 @@ const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ batch, allBatches, 
                  <th className="px-6 py-4 font-medium text-right">总吞吐量</th>
                </tr>
              </thead>
-             <tbody className="text-sm divide-y divide-white/5">
+             <tbody className="text-sm divide-y divide-white/5 overflow-y-auto">
                {roundSummaries.map((round) => (
                  <tr key={round.roundNumber} className="hover:bg-white/5 transition-colors">
                    <td className="px-6 py-4 font-mono text-gray-300">Round {round.roundNumber}</td>

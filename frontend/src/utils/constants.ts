@@ -16,12 +16,14 @@ export const DEFAULT_CONFIG = {
   topP: 0.1,
   presencePenalty: -1.0,
   frequencyPenalty: -1.0,
-  testCount: 10,
+  testCount: 2,
   concurrentTests: 3,
   timeout: 60
 };
 
 export const PROMPT_LENGTHS = [128, 256, 512, 1024, 2048];
+
+export const MAX_LIVE_CHART_POINTS = 50;
 
 export const EXPORT_FORMATS = [
   { value: 'csv', label: 'CSV 表格' },

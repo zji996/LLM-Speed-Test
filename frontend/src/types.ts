@@ -1,18 +1,31 @@
+export type TestMode = 'normal' | 'concurrency_step' | 'input_step';
+
+export interface StepConfiguration {
+  start: number;
+  end: number;
+  step: number;
+}
+
 export interface TestConfiguration {
   apiEndpoint: string;
   apiKey: string;
   model: string;
-  promptType: string;      // Prompt type is fixed-length in current UI
+  promptType: string;      // "fixed" or "custom"
   promptLength: number;    // Length of prompt in tokens
-  prompt: string;          // Reserved for future custom prompt support
+  prompt: string;          // Custom prompt content (if enabled)
   maxTokens: number;
   temperature: number;
   topP: number;
   presencePenalty: number;
   frequencyPenalty: number;
-  testCount: number;       // Number of submission rounds
-  concurrentTests: number; // Requests per round (concurrency limit)
-  timeout: number;
+
+  // Test mode & step configuration
+  testMode: TestMode;
+  stepConfig: StepConfiguration;
+
+  testCount: number;       // Number of submission rounds (per step when stepped)
+  concurrentTests: number; // Requests per round (base/fixed concurrency)
+  timeout: number;         // Timeout in seconds
   headers?: Record<string, string>;
 }
 
@@ -23,6 +36,7 @@ export interface TestResult {
   testNumber: number;
   roundNumber: number;
   roundPosition: number;
+  actualConcurrency: number;
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
@@ -78,6 +92,7 @@ export interface RoundSummary {
   averageOutputLatency: number;
   averageTotalLatency: number;
   averagePrefillTokensPerSecond: number;
+  totalPrefillTokensPerSecond: number;
   averageOutputTokensPerSecond: number;
   totalOutputTokensPerSecond: number;
 }
@@ -150,4 +165,17 @@ export interface ChartData {
     borderColor?: string | string[];
     fill?: boolean;
   }[];
+}
+
+export interface TelemetryUpdate {
+  timestamp: number;           // Unix timestamp in ms
+  activeTests: number;         // Current number of active requests
+  completedTests: number;      // Number of completed requests
+  totalTests: number;          // Total expected requests
+  generatedTokens: number;     // Total tokens generated so far
+  instantTPS: number;          // Instantaneous tokens per second
+  averageTTFT: number;         // Average time to first token (ms)
+  p95TTFT: number;             // 95th percentile TTFT (ms)
+  stepCurrent: number;         // Current step index (for step tests)
+  stepTotal: number;           // Total steps (for step tests)
 }
