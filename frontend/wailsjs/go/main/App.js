@@ -54,6 +54,10 @@ export function StartSpeedTest(arg1) {
   return window['go']['main']['App']['StartSpeedTest'](arg1);
 }
 
+export function StopSpeedTest(arg1) {
+  return window['go']['main']['App']['StopSpeedTest'](arg1);
+}
+
 export function ValidateAPIKey(arg1, arg2) {
   return window['go']['main']['App']['ValidateAPIKey'](arg1, arg2);
 }

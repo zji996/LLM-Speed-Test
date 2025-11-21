@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { RoundSummary, TestBatch } from '../../types';
 import { computeRoundSummaries } from '../../utils/roundSummary';
+import { Card } from '../common';
 
 type ChartMetric = 'latency' | 'throughput' | 'roundThroughput';
 
@@ -43,10 +44,10 @@ const CHART_CONFIG: Record<ChartMetric, ChartConfig> = {
     chipLabel: '最新延迟',
     bestLabel: '最低延迟',
     color: {
-      line: '#2563eb',
-      dot: '#1d4ed8',
-      gradientFrom: 'rgba(37,99,235,0.28)',
-      gradientTo: 'rgba(37,99,235,0.04)',
+      line: '#f59e0b', // Warning/Orange
+      dot: '#d97706',
+      gradientFrom: 'rgba(245, 158, 11, 0.5)',
+      gradientTo: 'rgba(245, 158, 11, 0.05)',
     },
   },
   throughput: {
@@ -62,15 +63,15 @@ const CHART_CONFIG: Record<ChartMetric, ChartConfig> = {
     chipLabel: '最新吞吐',
     bestLabel: '最高吞吐',
     color: {
-      line: '#0ea5e9',
-      dot: '#0284c7',
-      gradientFrom: 'rgba(14,165,233,0.25)',
-      gradientTo: 'rgba(14,165,233,0.05)',
+      line: '#06b6d4', // Primary/Cyan
+      dot: '#0891b2',
+      gradientFrom: 'rgba(6, 182, 212, 0.5)',
+      gradientTo: 'rgba(6, 182, 212, 0.05)',
     },
   },
   roundThroughput: {
     label: '轮次总吞吐趋势',
-    description: '展示每个测试轮中所有并发请求的输出吞吐总和（tokens/sec），用于衡量整体出词速度',
+    description: '展示每个测试轮中所有并发请求的输出吞吐总和，用于衡量整体并发能力',
     roundAccessor: (round) => round.totalOutputTokensPerSecond,
     summary: (summary) => ({
       average: summary.averageRoundThroughput,
@@ -81,10 +82,10 @@ const CHART_CONFIG: Record<ChartMetric, ChartConfig> = {
     chipLabel: '最新轮次吞吐',
     bestLabel: '最高轮次吞吐',
     color: {
-      line: '#f97316',
-      dot: '#ea580c',
-      gradientFrom: 'rgba(249,115,22,0.2)',
-      gradientTo: 'rgba(249,115,22,0.04)',
+      line: '#8b5cf6', // Secondary/Purple
+      dot: '#7c3aed',
+      gradientFrom: 'rgba(139, 92, 246, 0.5)',
+      gradientTo: 'rgba(139, 92, 246, 0.05)',
     },
   },
 };
@@ -101,7 +102,7 @@ const formatDisplayValue = (type: ChartMetric, value?: number | null): string =>
     return `${Math.round(value)}ms`;
   }
 
-  return `${value.toFixed(2)} tokens/s`;
+  return `${value.toFixed(2)} T/s`;
 };
 
 const ResultsChart: React.FC<ResultsChartProps> = ({ batch, chartType }) => {
@@ -111,7 +112,7 @@ const ResultsChart: React.FC<ResultsChartProps> = ({ batch, chartType }) => {
     if (config.roundAccessor) {
       return roundSummaries
         .map((round) => ({
-          label: `第${round.roundNumber}轮`,
+          label: `R${round.roundNumber}`,
           value: config.roundAccessor ? config.roundAccessor(round) : 0,
           success: round.totalRequests > 0,
         }))
@@ -145,9 +146,9 @@ const ResultsChart: React.FC<ResultsChartProps> = ({ batch, chartType }) => {
     maxValue = maxValue + pad;
   }
 
-  const chartWidth = 760;
-  const chartHeight = 320;
-  const padding = { top: 24, right: 24, bottom: 44, left: 64 };
+  const chartWidth = 1000; // Increased resolution
+  const chartHeight = 400;
+  const padding = { top: 40, right: 40, bottom: 60, left: 80 };
   const plotWidth = chartWidth - padding.left - padding.right;
   const plotHeight = chartHeight - padding.top - padding.bottom;
   const range = Math.max(maxValue - minValue, 1);
@@ -183,7 +184,7 @@ const ResultsChart: React.FC<ResultsChartProps> = ({ batch, chartType }) => {
     };
   });
 
-  const labelInterval = plottedPoints.length > 1 ? Math.ceil(plottedPoints.length / 8) : 1;
+  const labelInterval = plottedPoints.length > 15 ? Math.ceil(plottedPoints.length / 10) : 1;
   const latestPoint = plottedPoints[plottedPoints.length - 1];
   const bestPoint = plottedPoints.reduce((best, point) => {
     if (!best) return point;
@@ -197,167 +198,148 @@ const ResultsChart: React.FC<ResultsChartProps> = ({ batch, chartType }) => {
   const gradientId = `chart-gradient-${chartType}`;
 
   return (
-    <div className="chart-container space-y-6">
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+    <Card className="border-white/10">
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h3 className="chart-title mb-1">{config.label}</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">{config.description}</p>
+            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+              <span className="w-1.5 h-4 rounded-full" style={{ backgroundColor: config.color.line }}></span>
+              {config.label}
+            </h3>
+            <p className="text-sm text-gray-400">{config.description}</p>
           </div>
           {hasData && (
-            <div className="flex flex-wrap gap-2 text-xs font-medium text-gray-600 dark:text-gray-300">
+            <div className="flex flex-wrap gap-2 text-xs font-mono">
               {latestPoint && (
-                <span className="px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-700/60">
-                  {config.chipLabel} · {latestPoint.label} · {latestPoint.formatted}
+                <span className="px-3 py-1 rounded-full border border-white/10 bg-white/5 text-gray-300">
+                  {config.chipLabel}: {latestPoint.formatted}
                 </span>
               )}
               {bestPoint && (
-                <span className="px-3 py-1 rounded-full bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-200">
-                  {config.bestLabel} · {bestPoint.label} · {formatDisplayValue(chartType, bestPoint.value)}
+                <span className="px-3 py-1 rounded-full border border-white/10 bg-white/5 text-[var(--color-primary)]">
+                  {config.bestLabel}: {formatDisplayValue(chartType, bestPoint.value)}
                 </span>
               )}
-              <span className="px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-700/60">
-                样本 {chartPoints.length}
-              </span>
             </div>
           )}
         </div>
-      </div>
 
-      <div className="relative">
-        <svg
-          viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-          className="w-full h-full"
-          role="img"
-        >
-          <defs>
-            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={config.color.gradientFrom} />
-              <stop offset="100%" stopColor={config.color.gradientTo} />
-            </linearGradient>
-          </defs>
+        <div className="relative w-full aspect-[2.5/1] bg-black/20 rounded-lg border border-white/5 overflow-hidden">
+          <svg
+            viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+            className="w-full h-full"
+            preserveAspectRatio="none"
+          >
+            <defs>
+              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={config.color.gradientFrom} />
+                <stop offset="100%" stopColor={config.color.gradientTo} />
+              </linearGradient>
+              <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="2" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
+            </defs>
 
-          {/* Y axis grid */}
-          {yTicks.map((tick, index) => (
-            <g key={`y-${index}`}>
-              <line
-                x1={padding.left}
-                y1={tick.y}
-                x2={chartWidth - padding.right}
-                y2={tick.y}
-                stroke="#e5e7eb"
-                strokeDasharray="4 6"
-                opacity="0.5"
-              />
-              <text
-                x={padding.left - 12}
-                y={tick.y + 4}
-                className="text-xs fill-gray-500 dark:fill-gray-400"
-                textAnchor="end"
-              >
-                {formatDisplayValue(chartType, tick.value)}
-              </text>
-            </g>
-          ))}
+            {/* Grid Lines */}
+            {yTicks.map((tick, index) => (
+              <g key={`y-${index}`}>
+                <line
+                  x1={padding.left}
+                  y1={tick.y}
+                  x2={chartWidth - padding.right}
+                  y2={tick.y}
+                  stroke="rgba(255,255,255,0.05)"
+                  strokeDasharray="4 4"
+                />
+                <text
+                  x={padding.left - 12}
+                  y={tick.y + 4}
+                  className="text-[10px] fill-gray-500 font-mono"
+                  textAnchor="end"
+                >
+                  {formatDisplayValue(chartType, tick.value)}
+                </text>
+              </g>
+            ))}
 
-          {/* Baseline */}
-          <line
-            x1={padding.left}
-            y1={chartHeight - padding.bottom}
-            x2={chartWidth - padding.right}
-            y2={chartHeight - padding.bottom}
-            stroke="#cbd5f5"
-            opacity="0.8"
-          />
-
-          {/* Charts */}
-          {plottedPoints.length > 0 && (
-            <>
-              <path
-                d={areaPath}
-                fill={`url(#${gradientId})`}
-                opacity="0.9"
-              />
-              <path
-                d={linePath}
-                fill="none"
-                stroke={config.color.line}
-                strokeWidth={2.5}
-                strokeLinecap="round"
-              />
-              {plottedPoints.map((point, idx) => (
-                <g key={`${point.label}-${idx}`}>
+            {/* Data */}
+            {plottedPoints.length > 0 ? (
+              <>
+                <path
+                  d={areaPath}
+                  fill={`url(#${gradientId})`}
+                  className="transition-all duration-500 ease-in-out"
+                />
+                <path
+                  d={linePath}
+                  fill="none"
+                  stroke={config.color.line}
+                  strokeWidth={3}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  filter="url(#glow)"
+                  className="transition-all duration-500 ease-in-out"
+                />
+                {/* Only show dots if points are sparse enough */}
+                {plottedPoints.length < 50 && plottedPoints.map((point, idx) => (
                   <circle
+                    key={`dot-${idx}`}
                     cx={point.x}
                     cy={point.y}
-                    r={5}
-                    fill="#fff"
-                    stroke={config.color.dot}
+                    r={4}
+                    fill="#1a1a1a"
+                    stroke={config.color.line}
                     strokeWidth={2}
+                    className="transition-all duration-300 hover:r-6"
                   />
-                  <text
-                    x={point.x}
-                    y={point.y - 12}
-                    textAnchor="middle"
-                    className="text-[11px] fill-gray-500 dark:fill-gray-300"
-                  >
-                    {point.formatted}
-                  </text>
-                </g>
-              ))}
-            </>
-          )}
-
-          {/* X axis labels */}
-          {plottedPoints.map((point, idx) => {
-            if (idx % labelInterval !== 0 && idx !== plottedPoints.length - 1) {
-              return null;
-            }
-            return (
+                ))}
+              </>
+            ) : (
               <text
-                key={`x-${point.label}`}
-                x={point.x}
-                y={chartHeight - padding.bottom + 22}
-                textAnchor="middle"
-                className="text-xs fill-gray-500 dark:fill-gray-400"
+                 x={chartWidth/2}
+                 y={chartHeight/2}
+                 textAnchor="middle"
+                 className="fill-gray-600 text-sm"
               >
-                {point.label}
+                暂无数据
               </text>
-            );
-          })}
-        </svg>
+            )}
 
-        {!hasData && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-sm text-gray-500 dark:text-gray-400">
-            <p>暂无可用的成功测试数据，等待新的测试结果即可生成图表。</p>
-          </div>
-        )}
-      </div>
+            {/* X Axis Labels (Sparse) */}
+            {plottedPoints.map((point, idx) => {
+               if (idx % labelInterval !== 0 && idx !== plottedPoints.length - 1) return null;
+               return (
+                 <text
+                   key={`x-${idx}`}
+                   x={point.x}
+                   y={chartHeight - padding.bottom + 20}
+                   textAnchor="middle"
+                   className="text-[10px] fill-gray-500 font-mono"
+                 >
+                   {point.label}
+                 </text>
+               );
+            })}
+          </svg>
+        </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="metric-card border border-gray-200 dark:border-gray-700">
-          <div className="metric-title text-primary-600 dark:text-primary-400">平均值</div>
-          <div className="metric-value text-2xl">
-            {formatDisplayValue(chartType, summary.average)}
-          </div>
-          <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">Average</div>
-        </div>
-        <div className="metric-card border border-success-200 dark:border-success-800">
-          <div className="metric-title text-success-600 dark:text-success-400">最小值</div>
-          <div className="metric-value text-2xl">
-            {formatDisplayValue(chartType, summary.min)}
-          </div>
-          <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">Minimum</div>
-        </div>
-        <div className="metric-card border border-warning-200 dark:border-warning-800">
-          <div className="metric-title text-warning-600 dark:text-warning-400">最大值</div>
-          <div className="metric-value text-2xl">
-            {formatDisplayValue(chartType, summary.max)}
-          </div>
-          <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">Maximum</div>
+        <div className="grid grid-cols-3 gap-4 pt-2">
+           <div className="text-center p-3 rounded bg-white/5">
+              <div className="text-xs text-gray-500 uppercase">平均值</div>
+              <div className="text-xl font-mono font-bold text-white mt-1">{formatDisplayValue(chartType, summary.average)}</div>
+           </div>
+           <div className="text-center p-3 rounded bg-white/5">
+              <div className="text-xs text-gray-500 uppercase">最小值</div>
+              <div className="text-xl font-mono font-bold text-[var(--color-warning)] mt-1">{formatDisplayValue(chartType, summary.min)}</div>
+           </div>
+           <div className="text-center p-3 rounded bg-white/5">
+              <div className="text-xs text-gray-500 uppercase">最大值</div>
+              <div className="text-xl font-mono font-bold text-[var(--color-primary)] mt-1">{formatDisplayValue(chartType, summary.max)}</div>
+           </div>
         </div>
       </div>
-    </div>
+    </Card>
   );
 };
 

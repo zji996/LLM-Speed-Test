@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"sync"
+
+	"github.com/google/uuid"
 )
 
 // App struct
@@ -12,6 +14,7 @@ type App struct {
 	speedTestService *SpeedTestService
 	exportService    *ExportService
 	activeTests      map[string]*TestBatch
+	cancelFuncs      map[string]context.CancelFunc
 	mu               sync.RWMutex
 }
 
@@ -21,6 +24,7 @@ func NewApp() *App {
 		speedTestService: NewSpeedTestService(),
 		exportService:    NewExportService("exports"),
 		activeTests:      make(map[string]*TestBatch),
+		cancelFuncs:      make(map[string]context.CancelFunc),
 	}
 }
 
@@ -48,9 +52,21 @@ func (a *App) StartSpeedTest(config TestConfiguration) (*TestBatch, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
+	batchID := uuid.New().String()
+
+	// Create a context with cancel for this test batch
+	ctx, cancel := context.WithCancel(context.Background())
+	a.cancelFuncs[batchID] = cancel
+
 	// Run the speed test in a goroutine
 	go func() {
-		batch, err := a.speedTestService.RunSpeedTest(config)
+		defer func() {
+			a.mu.Lock()
+			delete(a.cancelFuncs, batchID)
+			a.mu.Unlock()
+		}()
+
+		batch, err := a.speedTestService.RunSpeedTest(ctx, config, batchID)
 		if err != nil {
 			fmt.Printf("Error running speed test: %v\n", err)
 			return
@@ -63,9 +79,35 @@ func (a *App) StartSpeedTest(config TestConfiguration) (*TestBatch, error) {
 
 	// Return a placeholder batch that will be updated
 	return &TestBatch{
-		ID:            "running",
+		ID:            batchID,
 		Configuration: config,
+		Results:       []TestResult{},
 	}, nil
+}
+
+// StopSpeedTest stops a running speed test
+func (a *App) StopSpeedTest(batchID string) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if cancel, exists := a.cancelFuncs[batchID]; exists {
+		cancel()
+		delete(a.cancelFuncs, batchID)
+		return nil
+	}
+	
+	// If no specific batch ID is provided or found, try to stop the most recent one?
+	// The UI currently might not track the ID perfectly for stopping. 
+	// Let's handle the case where batchID might be empty (stop all).
+	if batchID == "" && len(a.cancelFuncs) > 0 {
+		for id, cancel := range a.cancelFuncs {
+			cancel()
+			delete(a.cancelFuncs, id)
+		}
+		return nil
+	}
+
+	return fmt.Errorf("test batch not found or not running: %s", batchID)
 }
 
 // GetTestProgress retrieves the current progress of active tests
@@ -173,7 +215,7 @@ func (a *App) GetDefaultTestConfiguration() TestConfiguration {
 	return TestConfiguration{
 		APIEndpoint:      "https://api.openai.com/v1",
 		APIKey:           "",
-		Model:            "gpt-3.5-turbo",
+		Model:            "",
 		PromptType:       "fixed",
 		PromptLength:     512,
 		Prompt:           "",

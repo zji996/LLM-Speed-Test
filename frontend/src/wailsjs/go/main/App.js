@@ -31,6 +31,15 @@ export function StartSpeedTest(config) {
 }
 
 /**
+ * Stop a running speed test
+ * @param {string} batchId - Batch ID
+ * @returns {Promise<void>}
+ */
+export function StopSpeedTest(batchId) {
+  return window.go.main.App.StopSpeedTest(batchId);
+}
+
+/**
  * Get test progress
  * @returns {Promise<Array<ProgressUpdate>>} - Array of progress updates
  */

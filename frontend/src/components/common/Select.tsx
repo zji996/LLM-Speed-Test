@@ -33,27 +33,41 @@ const Select: React.FC<SelectProps> = ({
   };
 
   return (
-    <div className={`form-group ${className}`}>
+    <div className={`space-y-2 ${className}`}>
       {label && (
-        <label className="form-label">
+        <label className="block text-sm font-medium text-gray-300">
           {label}
-          {required && <span className="text-error-500 ml-1">*</span>}
+          {required && <span className="text-[var(--color-accent)] ml-1">*</span>}
         </label>
       )}
-      <select
-        value={value}
-        onChange={handleChange}
-        disabled={disabled}
-        className={`form-select ${error ? 'border-error-500' : ''}`}
-      >
-        <option value="">{placeholder}</option>
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-      {error && <p className="form-error mt-1">{error}</p>}
+      <div className="relative">
+        <select
+          value={value}
+          onChange={handleChange}
+          disabled={disabled}
+          className={`
+            w-full px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white appearance-none
+            transition-all duration-200
+            focus:outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] focus:shadow-[0_0_15px_rgba(6,182,212,0.3)]
+            disabled:opacity-50 disabled:cursor-not-allowed
+            ${error ? 'border-[var(--color-error)]' : ''}
+            ${value === '' ? 'text-gray-500' : ''}
+          `}
+        >
+          <option value="" className="bg-gray-900 text-gray-500">{placeholder}</option>
+          {options.map((option) => (
+            <option key={option.value} value={option.value} className="bg-gray-900 text-white">
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-400">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      </div>
+      {error && <p className="text-xs text-[var(--color-error)] mt-1 animate-fade-in">{error}</p>}
     </div>
   );
 };

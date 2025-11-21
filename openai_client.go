@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -81,7 +82,7 @@ func NewOpenAIClient(apiEndpoint, apiKey string, timeout int) *OpenAIClient {
 }
 
 // GenerateCompletion generates a completion using the OpenAI API
-func (c *OpenAIClient) GenerateCompletion(request OpenAIRequest, headers map[string]string) (*OpenAIResponse, time.Duration, error) {
+func (c *OpenAIClient) GenerateCompletion(ctx context.Context, request OpenAIRequest, headers map[string]string) (*OpenAIResponse, time.Duration, error) {
 	requestURL := fmt.Sprintf("%s/chat/completions", c.apiEndpoint)
 
 	jsonData, err := json.Marshal(request)
@@ -89,7 +90,7 @@ func (c *OpenAIClient) GenerateCompletion(request OpenAIRequest, headers map[str
 		return nil, 0, fmt.Errorf("error marshaling request: %v", err)
 	}
 
-	req, err := http.NewRequest("POST", requestURL, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, "POST", requestURL, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, 0, fmt.Errorf("error creating request: %v", err)
 	}
@@ -319,7 +320,7 @@ func (c *OpenAIClient) GetModels(headers map[string]string) ([]string, error) {
 	return models, nil
 }
 
-// ValidateAPIKey validates the API key by making a simple request
+	// ValidateAPIKey validates the API key by making a simple request
 func (c *OpenAIClient) ValidateAPIKey() error {
 	// First try to get available models to validate the API key
 	models, err := c.GetModels(nil)
@@ -340,6 +341,6 @@ func (c *OpenAIClient) ValidateAPIKey() error {
 		MaxTokens: 1,
 	}
 
-	_, _, err = c.GenerateCompletion(request, nil)
+	_, _, err = c.GenerateCompletion(context.Background(), request, nil)
 	return err
 }

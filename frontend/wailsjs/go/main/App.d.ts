@@ -28,6 +28,8 @@ export function Shutdown():Promise<void>;
 
 export function StartSpeedTest(arg1:main.TestConfiguration):Promise<main.TestBatch>;
 
+export function StopSpeedTest(arg1:string):Promise<void>;
+
 export function ValidateAPIKey(arg1:string,arg2:string):Promise<void>;
 
 export function ValidatePromptConfig(arg1:string,arg2:number):Promise<void>;

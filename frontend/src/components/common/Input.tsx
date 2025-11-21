@@ -34,11 +34,11 @@ const Input: React.FC<InputProps> = ({
   };
 
   return (
-    <div className={`form-group ${className}`}>
+    <div className={`space-y-2 ${className}`}>
       {label && (
-        <label className="form-label">
+        <label className="block text-sm font-medium text-gray-300">
           {label}
-          {required && <span className="text-error-500 ml-1">*</span>}
+          {required && <span className="text-[var(--color-accent)] ml-1">*</span>}
         </label>
       )}
       <input
@@ -47,12 +47,18 @@ const Input: React.FC<InputProps> = ({
         onChange={handleChange}
         placeholder={placeholder}
         disabled={disabled}
-        className={`form-input ${error ? 'border-error-500' : ''}`}
+        className={`
+          w-full px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-500
+          transition-all duration-200
+          focus:outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] focus:shadow-[0_0_15px_rgba(6,182,212,0.3)]
+          disabled:opacity-50 disabled:cursor-not-allowed
+          ${error ? 'border-[var(--color-error)] focus:border-[var(--color-error)] focus:ring-[var(--color-error)]' : ''}
+        `}
         min={min}
         max={max}
         step={step}
       />
-      {error && <p className="form-error mt-1">{error}</p>}
+      {error && <p className="text-xs text-[var(--color-error)] mt-1 animate-fade-in">{error}</p>}
     </div>
   );
 };

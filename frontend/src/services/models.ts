@@ -6,31 +6,18 @@ export interface ModelService {
 }
 
 export class OpenAIModelService implements ModelService {
-  private predefinedModels: ModelOption[] = [
-    { id: 'gpt-4-turbo', name: 'GPT-4 Turbo' },
-    { id: 'gpt-4', name: 'GPT-4' },
-    { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo' },
-    { id: 'gpt-3.5-turbo-16k', name: 'GPT-3.5 Turbo 16K' }
-  ];
-
   async fetchAvailableModels(endpoint: string, apiKey: string): Promise<ModelOption[]> {
     try {
       const { GetAvailableModels } = await import('../wailsjs/go/main/App');
       const models = await GetAvailableModels(endpoint, apiKey);
 
       if (models && models.length > 0) {
-        const modelOptions = models.map((model: string) => ({ id: model, name: model }));
-        return [
-          ...this.predefinedModels,
-          ...modelOptions.filter((m: ModelOption) =>
-            !this.predefinedModels.some((pm: ModelOption) => pm.id === m.id)
-          )
-        ];
+        return models.map((model: string) => ({ id: model, name: model }));
       }
-      return this.predefinedModels;
+      return [];
     } catch (error) {
       console.error('Failed to fetch models:', error);
-      return this.predefinedModels;
+      return [];
     }
   }
 

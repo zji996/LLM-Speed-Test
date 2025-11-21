@@ -1,13 +1,16 @@
 import React, { useMemo, useState } from 'react';
 import { TestBatch, ExportFormat, ExportOptions, RoundSummary } from '../../types';
 import { computeRoundSummaries } from '../../utils/roundSummary';
+import ConcurrencyComparisonChart from './ConcurrencyComparisonChart';
+import { Button, Card, Select } from '../common';
 
 interface ResultsDashboardProps {
   batch: TestBatch;
+  allBatches?: TestBatch[];
   onExport: (format: ExportFormat, options?: ExportOptions) => Promise<void> | void;
 }
 
-const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ batch, onExport }) => {
+const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ batch, allBatches, onExport }) => {
   const [exportFormat, setExportFormat] = useState<ExportFormat>('csv');
   const [isExporting, setIsExporting] = useState(false);
   const roundSummaries = useMemo<RoundSummary[]>(() => computeRoundSummaries(batch), [batch]);
@@ -39,16 +42,6 @@ const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ batch, onExport }) 
     return rate.toFixed(2);
   };
 
-  const formatRange = (min: number, max: number): string => {
-    if (!Number.isFinite(min) || !Number.isFinite(max)) return '--';
-    return `${formatDuration(min)} - ${formatDuration(max)}`;
-  };
-
-  const formatRateRange = (min: number, max: number): string => {
-    if (!Number.isFinite(min) || !Number.isFinite(max)) return '0.00 - 0.00';
-    return `${formatRate(min)} - ${formatRate(max)}`;
-  };
-
   const formatPercentage = (rate: number): string => {
     if (!Number.isFinite(rate)) return '0.0%';
     return `${(rate * 100).toFixed(1)}%`;
@@ -61,345 +54,189 @@ const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ batch, onExport }) 
     return Math.round(tokens).toString();
   };
 
-  const getRoundRowClass = (round: RoundSummary): string => {
-    if (!round.totalRequests) {
-      return '';
-    }
-    if (round.successfulRequests === round.totalRequests) {
-      return 'bg-success-50/50 dark:bg-success-900/10';
-    }
-    if (round.successfulRequests === 0) {
-      return 'bg-error-50/50 dark:bg-error-900/10';
-    }
-    return 'bg-warning-50/50 dark:bg-warning-900/10';
-  };
-
   return (
-    <div className="results-dashboard animate-fade-in">
-      <div className="card-header mb-8">
-        <h1 className="card-title text-3xl mb-2">测试结果分析</h1>
-        <p className="text-gray-600 dark:text-gray-400">详细的性能测试报告与指标分析</p>
+    <div className="space-y-8 pb-20">
+      <div className="text-center space-y-2">
+        <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] neon-text">
+           测试结果分析
+        </h1>
+        <p className="text-gray-400">详细的性能测试报告与指标分析</p>
       </div>
 
-      {/* Prefill vs Output Metrics */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <div className="card">
-          <div className="card-header">
-            <h3 className="card-title flex items-center">
-              <svg className="w-5 h-5 mr-2 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 17l4 4 4-4m0-10l-4-4-4 4" />
-              </svg>
-              预填充阶段 (TTFT)
-            </h3>
-          </div>
-          <div className="card-content space-y-4">
-            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">平均首Token时间</span>
-              <span className="text-lg font-bold text-indigo-600 dark:text-indigo-400">{formatDuration(batch.summary.averagePrefillLatency)}</span>
-            </div>
-            <div className="flex justify-between items-center p-3 bg-success-50 dark:bg-success-900/20 rounded-lg">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">范围</span>
-              <span className="text-lg font-semibold text-success-600 dark:text-success-400">{formatRange(batch.summary.minPrefillLatency, batch.summary.maxPrefillLatency)}</span>
-            </div>
-            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">平均预填充速度</span>
-              <span className="text-lg font-bold text-indigo-600 dark:text-indigo-400">{formatRate(batch.summary.averagePrefillTokensPerSecond)} tokens/s</span>
-            </div>
-            <div className="flex justify-between items-center p-3 bg-warning-50 dark:bg-warning-900/20 rounded-lg">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">速度范围</span>
-              <span className="text-lg font-semibold text-warning-600 dark:text-warning-400">{formatRateRange(batch.summary.minPrefillTokensPerSecond, batch.summary.maxPrefillTokensPerSecond)} tokens/s</span>
-            </div>
-          </div>
+      {/* Concurrency Comparison Chart */}
+      {allBatches && allBatches.length > 0 && (
+        <div className="animate-fade-in">
+           <ConcurrencyComparisonChart batches={allBatches} />
         </div>
-
-        <div className="card">
-          <div className="card-header">
-            <h3 className="card-title flex items-center">
-              <svg className="w-5 h-5 mr-2 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 4A8 8 0 118 4.582M15 11a3 3 0 00-6 0" />
-              </svg>
-              输出阶段 (Decode)
-            </h3>
-          </div>
-          <div className="card-content space-y-4">
-            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">平均输出时间</span>
-              <span className="text-lg font-bold text-orange-600 dark:text-orange-400">{formatDuration(batch.summary.averageOutputLatency)}</span>
-            </div>
-            <div className="flex justify-between items-center p-3 bg-success-50 dark:bg-success-900/20 rounded-lg">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">范围</span>
-              <span className="text-lg font-semibold text-success-600 dark:text-success-400">{formatRange(batch.summary.minOutputLatency, batch.summary.maxOutputLatency)}</span>
-            </div>
-            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">平均输出速度</span>
-              <span className="text-lg font-bold text-orange-600 dark:text-orange-400">{formatRate(batch.summary.averageOutputTokensPerSecond)} tokens/s</span>
-            </div>
-            <div className="flex justify-between items-center p-3 bg-warning-50 dark:bg-warning-900/20 rounded-lg">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">速度范围</span>
-              <span className="text-lg font-semibold text-warning-600 dark:text-warning-400">{formatRateRange(batch.summary.minOutputTokensPerSecond, batch.summary.maxOutputTokensPerSecond)} tokens/s</span>
-            </div>
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="metric-card border border-gray-200 dark:border-gray-700">
-          <div className="metric-title text-primary-600 dark:text-primary-400">总测试数</div>
-          <div className="metric-value text-3xl">{batch.summary.totalTests}</div>
-          <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">Total Tests</div>
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card className="bg-white/5 border border-white/10">
+          <div className="text-[var(--color-primary)] text-xs font-bold uppercase tracking-wider">总测试数</div>
+          <div className="text-4xl font-black text-white mt-2">{batch.summary.totalTests}</div>
+          <div className="text-xs text-gray-500 mt-1">Total Tests</div>
+        </Card>
 
-        <div className="metric-card border border-success-200 dark:border-success-800">
-          <div className="metric-title text-success-600 dark:text-success-400">成功测试</div>
-          <div className="metric-value text-3xl">{batch.summary.successfulTests}</div>
-          <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">Successful</div>
-        </div>
+        <Card className="bg-[var(--color-success)]/10 border border-[var(--color-success)]/20">
+          <div className="text-[var(--color-success)] text-xs font-bold uppercase tracking-wider">成功测试</div>
+          <div className="text-4xl font-black text-white mt-2">{batch.summary.successfulTests}</div>
+          <div className="text-xs text-gray-500 mt-1">Successful</div>
+        </Card>
 
-        <div className="metric-card border border-error-200 dark:border-error-800">
-          <div className="metric-title text-error-600 dark:text-error-400">失败测试</div>
-          <div className="metric-value text-3xl">{batch.summary.failedTests}</div>
-          <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">Failed</div>
-        </div>
+        <Card className="bg-[var(--color-error)]/10 border border-[var(--color-error)]/20">
+          <div className="text-[var(--color-error)] text-xs font-bold uppercase tracking-wider">失败测试</div>
+          <div className="text-4xl font-black text-white mt-2">{batch.summary.failedTests}</div>
+          <div className="text-xs text-gray-500 mt-1">Failed</div>
+        </Card>
 
-        <div className="metric-card border border-warning-200 dark:border-warning-800">
-          <div className="metric-title text-warning-600 dark:text-warning-400">错误率</div>
-          <div className="metric-value text-3xl">{formatPercentage(batch.summary.errorRate)}</div>
-          <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">Error Rate</div>
-        </div>
+        <Card className="bg-[var(--color-warning)]/10 border border-[var(--color-warning)]/20">
+          <div className="text-[var(--color-warning)] text-xs font-bold uppercase tracking-wider">错误率</div>
+          <div className="text-4xl font-black text-white mt-2">{formatPercentage(batch.summary.errorRate)}</div>
+          <div className="text-xs text-gray-500 mt-1">Error Rate</div>
+        </Card>
       </div>
 
-      {/* Performance Metrics */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <div className="card">
-          <div className="card-header">
-            <h3 className="card-title flex items-center">
-              <svg className="w-5 h-5 mr-2 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              延迟性能
-            </h3>
-          </div>
-          <div className="card-content space-y-4">
-            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">平均值</span>
-              <span className="text-lg font-bold text-primary-600 dark:text-primary-400">{formatDuration(batch.summary.averageLatency)}</span>
-            </div>
-            <div className="flex justify-between items-center p-3 bg-success-50 dark:bg-success-900/20 rounded-lg">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">最小值</span>
-              <span className="text-lg font-bold text-success-600 dark:text-success-400">{formatDuration(batch.summary.minLatency)}</span>
-            </div>
-            <div className="flex justify-between items-center p-3 bg-warning-50 dark:bg-warning-900/20 rounded-lg">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">最大值</span>
-              <span className="text-lg font-bold text-warning-600 dark:text-warning-400">{formatDuration(batch.summary.maxLatency)}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="card-header">
-            <h3 className="card-title flex items-center">
-              <svg className="w-5 h-5 mr-2 text-success-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              吞吐性能
-            </h3>
-          </div>
-          <div className="card-content space-y-4">
-            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">平均值</span>
-              <span className="text-lg font-bold text-primary-600 dark:text-primary-400">{formatRate(batch.summary.averageThroughput)} tokens/s</span>
-            </div>
-            <div className="flex justify-between items-center p-3 bg-success-50 dark:bg-success-900/20 rounded-lg">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">最小值</span>
-              <span className="text-lg font-bold text-success-600 dark:text-success-400">{formatRate(batch.summary.minThroughput)} tokens/s</span>
-            </div>
-            <div className="flex justify-between items-center p-3 bg-warning-50 dark:bg-warning-900/20 rounded-lg">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">最大值</span>
-              <span className="text-lg font-bold text-warning-600 dark:text-warning-400">{formatRate(batch.summary.maxThroughput)} tokens/s</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="card-header">
-            <h3 className="card-title flex items-center">
-              <svg className="w-5 h-5 mr-2 text-info-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-              </svg>
-              轮次总吞吐
-            </h3>
-          </div>
-          <div className="card-content space-y-4">
-            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">平均值</span>
-              <span className="text-lg font-bold text-primary-600 dark:text-primary-400">{formatRate(batch.summary.averageRoundThroughput)} tokens/s</span>
-            </div>
-            <div className="flex justify-between items-center p-3 bg-success-50 dark:bg-success-900/20 rounded-lg">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">最小值</span>
-              <span className="text-lg font-bold text-success-600 dark:text-success-400">{formatRate(batch.summary.minRoundThroughput)} tokens/s</span>
-            </div>
-            <div className="flex justify-between items-center p-3 bg-warning-50 dark:bg-warning-900/20 rounded-lg">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">最大值</span>
-              <span className="text-lg font-bold text-warning-600 dark:text-warning-400">{formatRate(batch.summary.maxRoundThroughput)} tokens/s</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Test Details */}
-      <div className="card mb-8">
-        <div className="card-header">
-          <h3 className="card-title flex items-center">
-            <svg className="w-5 h-5 mr-2 text-secondary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            测试详情
-          </h3>
-        </div>
-        <div className="card-content">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Detailed Metrics - Split into TTFT and Output */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+         {/* TTFT */}
+         <Card 
+           header={
+             <div className="flex items-center text-[var(--color-primary)] font-semibold">
+               <span className="w-2 h-2 rounded-full bg-[var(--color-primary)] mr-2 shadow-[0_0_10px_var(--color-primary)]"></span>
+               预填充阶段 (TTFT)
+             </div>
+           }
+         >
             <div className="space-y-4">
-              <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">模型</span>
-                <span className="text-sm font-mono bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded">{batch.configuration.model}</span>
+              <div className="flex justify-between items-center p-3 rounded-lg bg-white/5 border border-white/5">
+                 <span className="text-sm text-gray-400">平均首Token耗时</span>
+                 <span className="text-xl font-mono font-bold text-white">{formatDuration(batch.summary.averagePrefillLatency)}</span>
               </div>
-              <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">开始时间</span>
-                <span className="text-sm text-gray-600 dark:text-gray-400">{new Date(batch.startTime).toLocaleString()}</span>
+              <div className="grid grid-cols-2 gap-4">
+                 <div className="p-3 rounded-lg bg-white/5">
+                    <div className="text-xs text-gray-500 mb-1">最小耗时</div>
+                    <div className="font-mono text-[var(--color-success)]">{formatDuration(batch.summary.minPrefillLatency)}</div>
+                 </div>
+                 <div className="p-3 rounded-lg bg-white/5">
+                    <div className="text-xs text-gray-500 mb-1">最大耗时</div>
+                    <div className="font-mono text-[var(--color-warning)]">{formatDuration(batch.summary.maxPrefillLatency)}</div>
+                 </div>
               </div>
-              <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">结束时间</span>
-                <span className="text-sm text-gray-600 dark:text-gray-400">{new Date(batch.endTime).toLocaleString()}</span>
+              <div className="flex justify-between items-center p-3 rounded-lg bg-white/5 border border-white/5">
+                 <span className="text-sm text-gray-400">平均处理速度</span>
+                 <span className="text-lg font-mono font-bold text-[var(--color-primary)]">{formatRate(batch.summary.averagePrefillTokensPerSecond)} <span className="text-xs text-gray-500">T/s</span></span>
               </div>
             </div>
+         </Card>
+
+         {/* Output */}
+         <Card 
+           header={
+             <div className="flex items-center text-[var(--color-secondary)] font-semibold">
+               <span className="w-2 h-2 rounded-full bg-[var(--color-secondary)] mr-2 shadow-[0_0_10px_var(--color-secondary)]"></span>
+               输出阶段 (Decode)
+             </div>
+           }
+         >
             <div className="space-y-4">
-              <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">测试时长</span>
-                <span className="text-sm font-semibold text-primary-600 dark:text-primary-400">{formatDuration(new Date(batch.endTime).getTime() - new Date(batch.startTime).getTime())}</span>
+              <div className="flex justify-between items-center p-3 rounded-lg bg-white/5 border border-white/5">
+                 <span className="text-sm text-gray-400">平均输出耗时</span>
+                 <span className="text-xl font-mono font-bold text-white">{formatDuration(batch.summary.averageOutputLatency)}</span>
               </div>
-              <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">提示词长度</span>
-                <span className="text-sm font-semibold">{batch.configuration.promptLength} tokens</span>
+              <div className="grid grid-cols-2 gap-4">
+                 <div className="p-3 rounded-lg bg-white/5">
+                    <div className="text-xs text-gray-500 mb-1">最小耗时</div>
+                    <div className="font-mono text-[var(--color-success)]">{formatDuration(batch.summary.minOutputLatency)}</div>
+                 </div>
+                 <div className="p-3 rounded-lg bg-white/5">
+                    <div className="text-xs text-gray-500 mb-1">最大耗时</div>
+                    <div className="font-mono text-[var(--color-warning)]">{formatDuration(batch.summary.maxOutputLatency)}</div>
+                 </div>
               </div>
-              <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">提交策略</span>
-                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                  {batch.configuration.testCount} 轮 × {batch.configuration.concurrentTests} 并发 = {batch.summary.totalTests} 次请求
-                </span>
+              <div className="flex justify-between items-center p-3 rounded-lg bg-white/5 border border-white/5">
+                 <span className="text-sm text-gray-400">平均生成速度</span>
+                 <span className="text-lg font-mono font-bold text-[var(--color-secondary)]">{formatRate(batch.summary.averageOutputTokensPerSecond)} <span className="text-xs text-gray-500">T/s</span></span>
               </div>
+            </div>
+         </Card>
+      </div>
+
+      {/* Round Details Table */}
+      <Card
+        header={
+          <div className="flex items-center justify-between">
+            <div className="flex items-center font-semibold text-white">
+              <svg className="w-5 h-5 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+              轮次详细数据
+            </div>
+            <div className="text-xs text-gray-500 font-mono">
+              {batch.configuration.testCount} Rounds × {batch.configuration.concurrentTests} Concurrency
             </div>
           </div>
+        }
+        className="overflow-hidden"
+      >
+        <div className="overflow-x-auto -mx-6 -my-6">
+           <table className="w-full text-left border-collapse">
+             <thead>
+               <tr className="border-b border-white/10 bg-white/5 text-xs uppercase tracking-wider text-gray-400">
+                 <th className="px-6 py-4 font-medium">轮次</th>
+                 <th className="px-6 py-4 font-medium">Tokens (Prompt/Out)</th>
+                 <th className="px-6 py-4 font-medium">延迟 (TTFT/Total)</th>
+                 <th className="px-6 py-4 font-medium text-right">生成速率</th>
+                 <th className="px-6 py-4 font-medium text-right">总吞吐量</th>
+               </tr>
+             </thead>
+             <tbody className="text-sm divide-y divide-white/5">
+               {roundSummaries.map((round) => (
+                 <tr key={round.roundNumber} className="hover:bg-white/5 transition-colors">
+                   <td className="px-6 py-4 font-mono text-gray-300">Round {round.roundNumber}</td>
+                   <td className="px-6 py-4 text-gray-400">
+                      <span className="text-gray-300">{formatTokens(round.averagePromptTokens)}</span> / <span className="text-gray-300">{formatTokens(round.averageCompletionTokens)}</span>
+                   </td>
+                   <td className="px-6 py-4 text-gray-400">
+                      <span className="text-[var(--color-primary)]">{formatDuration(round.averagePrefillLatency)}</span> / <span className="text-white">{formatDuration(round.averageTotalLatency)}</span>
+                   </td>
+                   <td className="px-6 py-4 text-right font-mono text-[var(--color-secondary)] font-semibold">
+                      {formatRate(round.averageOutputTokensPerSecond)}
+                   </td>
+                   <td className="px-6 py-4 text-right font-mono text-white font-bold">
+                      {formatRate(round.totalOutputTokensPerSecond)}
+                   </td>
+                 </tr>
+               ))}
+             </tbody>
+           </table>
         </div>
-      </div>
+      </Card>
 
       {/* Export Section */}
-      <div className="card mb-8">
-        <div className="card-header">
-          <h3 className="card-title flex items-center">
-            <svg className="w-5 h-5 mr-2 text-success-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            导出结果
-          </h3>
-        </div>
-        <div className="card-content">
-          <div className="flex flex-col sm:flex-row gap-4 items-end">
-            <div className="form-group flex-1">
-              <label htmlFor="exportFormat" className="form-label">导出格式</label>
-              <select
-                id="exportFormat"
-                value={exportFormat}
-                onChange={(e) => setExportFormat(e.target.value as ExportFormat)}
-                className="form-select"
-              >
-                <option value="csv">CSV 表格</option>
-                <option value="json">JSON 数据</option>
-                <option value="png">图表图片</option>
-              </select>
+      <Card className="bg-gradient-to-r from-gray-900 to-black border border-white/10">
+         <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div>
+               <h3 className="text-lg font-semibold text-white mb-1">导出测试报告</h3>
+               <p className="text-sm text-gray-500">将测试结果导出为 CSV、JSON 或图表图片以便分享。</p>
             </div>
-            <button
-              onClick={handleExport}
-              disabled={isExporting}
-              className="btn-primary px-6 py-2"
-            >
-              {isExporting ? (
-                <>
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  导出中...
-                </>
-              ) : (
-                '导出结果'
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Individual Test Results */}
-      <div className="card">
-        <div className="card-header">
-          <h3 className="card-title flex items-center">
-            <svg className="w-5 h-5 mr-2 text-secondary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-            </svg>
-            轮次级详细表现
-          </h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            每轮 {batch.configuration.concurrentTests} 并发 · 共 {roundSummaries.length || batch.configuration.testCount} 轮
-          </p>
-        </div>
-        <div className="card-content">
-          <div className="overflow-x-auto responsive-table">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th className="w-20">轮次</th>
-                  <th className="w-48">请求Tokens</th>
-                  <th className="w-48">平均耗时</th>
-                  <th className="w-44">平均输出吞吐</th>
-                  <th className="w-40">总输出吞吐</th>
-                </tr>
-              </thead>
-              <tbody>
-                {roundSummaries.length > 0 ? (
-                  roundSummaries.map((round) => (
-                    <tr key={`round-${round.roundNumber}`} className={getRoundRowClass(round)}>
-                      <td className="font-semibold text-gray-900 dark:text-gray-100">第 {round.roundNumber} 轮</td>
-                      <td className="font-mono text-xs space-y-1">
-                        <div>Prompt: {formatTokens(round.averagePromptTokens)}</div>
-                        <div>Output: {formatTokens(round.averageCompletionTokens)}</div>
-                        <div>Total: {formatTokens(round.averageTotalTokens)}</div>
-                      </td>
-                      <td className="font-mono text-xs space-y-1">
-                        <div>TTFT: {formatDuration(round.averagePrefillLatency)}</div>
-                        <div>输出: {formatDuration(round.averageOutputLatency)}</div>
-                        <div>总计: {formatDuration(round.averageTotalLatency)}</div>
-                      </td>
-                      <td className="font-mono text-sm space-y-1">
-                        <div className="font-semibold text-orange-600 dark:text-orange-400">{formatRate(round.averageOutputTokensPerSecond)} tokens/s</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">预填充: {formatRate(round.averagePrefillTokensPerSecond)} tokens/s</div>
-                      </td>
-                      <td className="font-mono text-sm font-semibold text-primary-600 dark:text-primary-400">
-                        {formatRate(round.totalOutputTokensPerSecond)} tokens/s
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={5} className="text-center text-gray-500 dark:text-gray-400 py-6">
-                      暂无可用的轮次数据，请先完成一次完整的测试。
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+            <div className="flex items-center gap-4 w-full sm:w-auto">
+               <Select
+                 value={exportFormat}
+                 onChange={(v) => setExportFormat(v as ExportFormat)}
+                 options={[
+                   { value: 'csv', label: 'CSV 表格' },
+                   { value: 'json', label: 'JSON 数据' },
+                   { value: 'png', label: 'PNG 图片' }
+                 ]}
+                 className="min-w-[140px]"
+               />
+               <Button onClick={handleExport} loading={isExporting} variant="primary">
+                  导出文件
+               </Button>
+            </div>
+         </div>
+      </Card>
     </div>
   );
 };

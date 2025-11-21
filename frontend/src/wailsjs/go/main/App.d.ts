@@ -1,6 +1,7 @@
 export function ValidateAPIKey(arg1:string,arg2:string):Promise<void>;
 export function GetAvailableModels(arg1:string,arg2:string):Promise<Array<string>>;
 export function StartSpeedTest(arg1:TestConfiguration):Promise<TestBatch>;
+export function StopSpeedTest(arg1:string):Promise<void>;
 export function GetTestProgress():Promise<Array<ProgressUpdate>>;
 export function GetTestResults():Promise<Array<TestResult>>;
 export function GetTestBatch(arg1:string):Promise<TestBatch>;

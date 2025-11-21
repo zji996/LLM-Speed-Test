@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math"
@@ -36,8 +37,10 @@ func (s *SpeedTestService) GetResultsChannel() <-chan TestResult {
 }
 
 // RunSpeedTest executes a speed test batch
-func (s *SpeedTestService) RunSpeedTest(config TestConfiguration) (*TestBatch, error) {
-	batchID := uuid.New().String()
+func (s *SpeedTestService) RunSpeedTest(ctx context.Context, config TestConfiguration, batchID string) (*TestBatch, error) {
+	if batchID == "" {
+		batchID = uuid.New().String()
+	}
 	startTime := time.Now().Format(time.RFC3339)
 
 	totalTests := config.TestCount * config.ConcurrentTests
@@ -52,11 +55,27 @@ func (s *SpeedTestService) RunSpeedTest(config TestConfiguration) (*TestBatch, e
 	// Create a semaphore to limit concurrent tests
 	semaphore := make(chan struct{}, config.ConcurrentTests)
 
+	// Create a derived context for this specific batch execution if needed,
+	// but using the passed ctx is fine as it controls the whole operation.
+
 	for i := 0; i < totalTests; i++ {
+		// Check if context is cancelled before starting new test
+		select {
+		case <-ctx.Done():
+			break
+		default:
+		}
+
 		wg.Add(1)
 		go func(testNumber int) {
 			defer wg.Done()
-			semaphore <- struct{}{}
+			
+			// Acquire semaphore or exit if context cancelled
+			select {
+			case semaphore <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
 			defer func() { <-semaphore }()
 
 			// Send progress update
@@ -67,10 +86,16 @@ func (s *SpeedTestService) RunSpeedTest(config TestConfiguration) (*TestBatch, e
 				TotalTests: totalTests,
 				Status:     "running",
 			}
-			s.progressChan <- progress
+			
+			// Send to progress channel unless context cancelled
+			select {
+			case s.progressChan <- progress:
+			case <-ctx.Done():
+				return
+			}
 
 			// Run individual test
-			result := s.runIndividualTest(config, testNumber+1)
+			result := s.runIndividualTest(ctx, config, testNumber+1)
 			result.ID = progress.TestID
 
 			// Update progress
@@ -80,13 +105,23 @@ func (s *SpeedTestService) RunSpeedTest(config TestConfiguration) (*TestBatch, e
 				progress.Status = "failed"
 				progress.Message = result.Error
 			}
-			s.progressChan <- progress
+			
+			select {
+			case s.progressChan <- progress:
+			case <-ctx.Done():
+				return
+			}
 
 			// Send result
 			mu.Lock()
 			results = append(results, result)
 			mu.Unlock()
-			s.resultsChan <- result
+			
+			select {
+			case s.resultsChan <- result:
+			case <-ctx.Done():
+				return
+			}
 
 		}(i)
 	}
@@ -140,7 +175,7 @@ func (s *SpeedTestService) RunSpeedTest(config TestConfiguration) (*TestBatch, e
 }
 
 // runIndividualTest runs a single speed test
-func (s *SpeedTestService) runIndividualTest(config TestConfiguration, testNumber int) TestResult {
+func (s *SpeedTestService) runIndividualTest(ctx context.Context, config TestConfiguration, testNumber int) TestResult {
 	concurrency := config.ConcurrentTests
 	if concurrency <= 0 {
 		concurrency = 1
@@ -186,12 +221,18 @@ func (s *SpeedTestService) runIndividualTest(config TestConfiguration, testNumbe
 
 	// Execute request
 	startTime := time.Now()
-	response, latency, err := client.GenerateCompletion(request, config.Headers)
+	response, latency, err := client.GenerateCompletion(ctx, request, config.Headers)
 	if err != nil && request.Stream {
+		// Check if error is due to cancellation
+		if ctx.Err() != nil {
+			result.Error = "cancelled"
+			return result
+		}
+		
 		log.Printf("Streaming completion failed, retrying without stream: %v", err)
 		request.Stream = false
 		request.StreamOptions = nil
-		response, latency, err = client.GenerateCompletion(request, config.Headers)
+		response, latency, err = client.GenerateCompletion(ctx, request, config.Headers)
 	}
 	totalLatency := time.Since(startTime)
 	totalLatencyMs := float64(totalLatency) / float64(time.Millisecond)
