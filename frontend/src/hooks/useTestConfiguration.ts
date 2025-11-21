@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react';
-import { StepConfiguration, TestConfiguration, TestMode } from '../types';
+import {
+  PersistedAppConfig,
+  PersistedTestState,
+  SavedApiConfig,
+  StepConfiguration,
+  TestConfiguration,
+  TestMode,
+} from '../types';
 import { useModelSelection } from './useModelSelection';
 import { PROMPT_LENGTHS } from '../utils';
 
@@ -13,13 +20,6 @@ export interface UseTestConfigurationOptions {
 interface SelectOption {
   value: string;
   label: string;
-}
-
-export interface SavedApiConfig {
-  id: string;
-  name: string;
-  apiEndpoint: string;
-  apiKey: string;
 }
 
 const DEFAULT_SAVED_API_CONFIGS: SavedApiConfig[] = [
@@ -37,21 +37,27 @@ const DEFAULT_SAVED_API_CONFIGS: SavedApiConfig[] = [
   },
 ];
 
-interface PersistedTestState {
-  config: TestConfiguration;
-  mode: TestMode;
-  concurrencyStepConfig: StepConfiguration;
-  concurrencyStepCount: number;
-  inputStepConfig: StepConfiguration;
-  inputStepCount: number;
-}
+// Heuristic guard: some early versions of the desktop
+// config service could return an "empty" testState object
+// (all numeric fields = 0, strings = ''), which would
+// overwrite our intended defaults on first launch.
+// Treat such shapes as "no persisted state" so that the
+// UI falls back to proper defaults until a real config
+// has been saved.
+const isValidPersistedTestState = (state: PersistedTestState | undefined | null): state is PersistedTestState => {
+  if (!state || !state.config) return false;
 
-interface PersistedAppConfig {
-  testState?: PersistedTestState;
-  savedApiConfigs?: SavedApiConfig[];
-  lastValidApiEndpoint?: string;
-  lastValidApiKey?: string;
-}
+  const cfg = state.config as Partial<TestConfiguration>;
+
+  // Consider the state valid only if at least one of the
+  // key numeric fields has a sensible positive value.
+  const hasPositiveNumbers =
+    (typeof cfg.testCount === 'number' && cfg.testCount > 0) ||
+    (typeof cfg.concurrentTests === 'number' && cfg.concurrentTests > 0) ||
+    (typeof cfg.timeout === 'number' && cfg.timeout > 0);
+
+  return !!hasPositiveNumbers;
+};
 
 export interface UseTestConfigurationResult {
   mode: TestMode;
@@ -90,7 +96,7 @@ export interface UseTestConfigurationResult {
   modelOptions: SelectOption[];
   promptLengthOptions: SelectOption[];
 
-  handleInputChange: (field: keyof TestConfiguration, value: any) => void;
+  handleInputChange: <K extends keyof TestConfiguration>(field: K, value: TestConfiguration[K]) => void;
   handleValidateAPI: () => Promise<void>;
   handleStartTest: () => Promise<void>;
   resetToDefaults: () => Promise<void>;
@@ -232,57 +238,73 @@ export const useTestConfiguration = (
 
         let restoredMode: TestMode = 'normal';
 
-        // Apply persisted test state from config file first
-        const persistedState = persisted?.testState;
-        if (persistedState) {
-          mergedConfig = {
-            ...mergedConfig,
-            ...persistedState.config,
-          };
-          restoredMode = persistedState.mode;
-          setConcurrencyStepConfig(persistedState.concurrencyStepConfig);
-          setConcurrencyStepCount(persistedState.concurrencyStepCount);
-          setInputStepConfig(persistedState.inputStepConfig);
-          setInputStepCount(persistedState.inputStepCount);
-        }
+        // 1) Prefer UI-side state persisted in localStorage (latest edits)
+        let usedState: PersistedTestState | undefined;
 
-        // Then merge any legacy localStorage-based state for backward compatibility
-        if (savedStateRaw && !persistedState) {
+        if (savedStateRaw) {
           try {
             const savedState = JSON.parse(savedStateRaw) as PersistedTestState;
-            if (savedState.config) {
+            if (savedState && savedState.config) {
+              const {
+                apiEndpoint: _ignoredSavedEndpoint,
+                apiKey: _ignoredSavedApiKey,
+                ...restSavedConfig
+              } = savedState.config as TestConfiguration;
+
               mergedConfig = {
                 ...mergedConfig,
-                ...savedState.config,
+                ...restSavedConfig,
               };
             }
-            if (savedState.mode) {
+            if (savedState && savedState.mode) {
               restoredMode = savedState.mode as TestMode;
             }
-            if (savedState.concurrencyStepConfig) {
+            if (savedState && savedState.concurrencyStepConfig) {
               setConcurrencyStepConfig(savedState.concurrencyStepConfig as StepConfiguration);
             }
-            if (typeof savedState.concurrencyStepCount === 'number') {
+            if (savedState && typeof savedState.concurrencyStepCount === 'number') {
               setConcurrencyStepCount(savedState.concurrencyStepCount as number);
             }
-            if (savedState.inputStepConfig) {
+            if (savedState && savedState.inputStepConfig) {
               setInputStepConfig(savedState.inputStepConfig as StepConfiguration);
             }
-            if (typeof savedState.inputStepCount === 'number') {
+            if (savedState && typeof savedState.inputStepCount === 'number') {
               setInputStepCount(savedState.inputStepCount as number);
             }
+            usedState = savedState;
           } catch (e) {
-            console.warn('Failed to restore saved test configuration state:', e);
+            console.warn('Failed to restore saved test configuration state from localStorage:', e);
           }
         }
 
-        // Select endpoint/key precedence:
-        // 1) last validated values (from file or localStorage)
-        // 2) explicit saved values from localStorage
-        // 3) whatever is in mergedConfig/defaultConfig
+        // 2) Fallback: use persisted desktop config file state when there is no localStorage state
+        if (!usedState) {
+          const persistedState = isValidPersistedTestState(persisted?.testState) ? persisted!.testState : undefined;
+          if (persistedState) {
+            const {
+              apiEndpoint: _ignoredPersistedEndpoint,
+              apiKey: _ignoredPersistedApiKey,
+              ...restPersistedConfig
+            } = persistedState.config as TestConfiguration;
+
+            mergedConfig = {
+              ...mergedConfig,
+              ...restPersistedConfig,
+            };
+            restoredMode = persistedState.mode;
+            setConcurrencyStepConfig(persistedState.concurrencyStepConfig);
+            setConcurrencyStepCount(persistedState.concurrencyStepCount);
+            setInputStepConfig(persistedState.inputStepConfig);
+            setInputStepCount(persistedState.inputStepCount);
+          }
+        }
+
+        // Decide which API endpoint/key to use, independent of the test
+        // configuration so that defaults and API state can evolve separately.
         const effectiveEndpoint =
           lastValidEndpoint || savedEndpoint || mergedConfig.apiEndpoint || defaultConfig.apiEndpoint;
-        const effectiveApiKey = lastValidApiKey || savedApiKey || mergedConfig.apiKey || defaultConfig.apiKey;
+        const effectiveApiKey =
+          lastValidApiKey || savedApiKey || mergedConfig.apiKey || defaultConfig.apiKey;
 
         mergedConfig = {
           ...mergedConfig,
@@ -302,8 +324,8 @@ export const useTestConfiguration = (
         setConfig(mergedConfig);
         setMode(restoredMode);
 
-        if (effectiveApiKey && effectiveEndpoint) {
-          fetchModels(effectiveEndpoint, effectiveApiKey);
+        if (mergedConfig.apiEndpoint && mergedConfig.apiKey) {
+          fetchModels(mergedConfig.apiEndpoint, mergedConfig.apiKey);
         }
       } catch (err) {
         console.error('Failed to load defaults:', err);
@@ -353,19 +375,19 @@ export const useTestConfiguration = (
         lastValidApiKey: lastValidApiKey ?? localStorage.getItem('lastValidApiKey') ?? '',
       };
 
-      await SaveAppConfig(appConfig as any);
+      await SaveAppConfig(appConfig);
     } catch (err) {
       console.warn('Failed to persist app config file:', err);
     }
   };
 
-  const handleInputChange = (field: keyof TestConfiguration, value: any) => {
+  const handleInputChange = <K extends keyof TestConfiguration>(field: K, value: TestConfiguration[K]) => {
     setConfig(prev => {
-      const next = { ...prev, [field]: value };
-      if (field === 'apiEndpoint') localStorage.setItem('apiEndpoint', value);
-      if (field === 'apiKey') localStorage.setItem('apiKey', value);
+      const next: TestConfiguration = { ...prev, [field]: value };
+      if (field === 'apiEndpoint') localStorage.setItem('apiEndpoint', String(value));
+      if (field === 'apiKey') localStorage.setItem('apiKey', String(value));
       if (field === 'model') {
-        if (value) localStorage.setItem('selectedModel', value);
+        if (value) localStorage.setItem('selectedModel', String(value));
         else localStorage.removeItem('selectedModel');
       }
       return next;

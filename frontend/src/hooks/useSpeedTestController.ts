@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { TestConfiguration as TestConfigType, TestBatch, TestResult, TelemetryUpdate } from '../types';
+import {
+  ExportOptions,
+  TestConfiguration as TestConfigType,
+  TestBatch,
+  TestResult,
+  TelemetryUpdate,
+} from '../types';
 import { useTestProgress, TestProgress } from './useTestProgress';
 import { GetTestProgress, GetTestResults, GetTestBatch, StartSpeedTest, ExportTestData, GetTelemetryUpdates } from '../wailsjs/go/main/App';
 
@@ -23,7 +29,7 @@ export interface SpeedTestControllerState {
   hasQueuedTests: boolean;
   currentRunType: RunType;
   handleStartTest: (config: TestConfigType | TestConfigType[]) => Promise<void>;
-  handleExport: (format: 'csv' | 'json' | 'png', options?: any) => Promise<void>;
+  handleExport: (format: 'csv' | 'json' | 'png', options?: ExportOptions) => Promise<void>;
 }
 
 export const useSpeedTestController = (): SpeedTestControllerState => {
@@ -208,7 +214,7 @@ export const useSpeedTestController = (): SpeedTestControllerState => {
     }
   };
 
-  const handleExport = async (format: 'csv' | 'json' | 'png', options?: any) => {
+  const handleExport = async (format: 'csv' | 'json' | 'png', options?: ExportOptions) => {
     if (!currentBatch) return;
     try {
       const filePath = await ExportTestData(currentBatch.id, format, options || {});

@@ -144,7 +144,7 @@ export function ValidatePromptConfig(promptType, promptLength) {
 
 /**
  * Get persisted application configuration from disk.
- * @returns {Promise<any>} - Raw AppConfig JSON
+ * @returns {Promise<import('../../../types').PersistedAppConfig>} - Persisted app config
  */
 export function GetAppConfig() {
   return window.go.main.App.GetAppConfig();
@@ -152,7 +152,7 @@ export function GetAppConfig() {
 
 /**
  * Persist application configuration to disk.
- * @param {any} config - AppConfig JSON
+ * @param {import('../../../types').PersistedAppConfig} config - App config JSON snapshot
  * @returns {Promise<void>}
  */
 export function SaveAppConfig(config) {

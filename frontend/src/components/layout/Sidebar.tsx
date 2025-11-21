@@ -1,25 +1,5 @@
 import React from 'react';
-
-export interface NavItem {
-  id: string;
-  label: string;
-  icon: string;
-}
-
-interface SidebarProps {
-  items: NavItem[];
-  activeTab: string;
-  onTabChange: (tab: string) => void;
-  disabledTabs?: string[];
-  testStatus?: {
-    isRunning: boolean;
-    status: string;
-  };
-  completedBatches?: any[];
-  currentBatch?: any;
-  onBatchSelect?: (batch: any) => void;
-  onStopTest?: () => void;
-}
+import type { SidebarProps } from '../../types/ui.types';
 
 const Sidebar: React.FC<SidebarProps> = ({
   items,

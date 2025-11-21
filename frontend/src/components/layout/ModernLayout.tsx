@@ -1,10 +1,12 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 
+type ModernLayoutTab = 'configuration' | 'results' | 'charts';
+
 interface ModernLayoutProps {
   children: React.ReactNode;
-  activeTab: 'configuration' | 'results' | 'charts';
-  onTabChange: (tab: 'configuration' | 'results' | 'charts') => void;
+  activeTab: ModernLayoutTab;
+  onTabChange: (tab: ModernLayoutTab) => void;
   testStatus?: {
     isRunning: boolean;
     status: string;
@@ -17,22 +19,34 @@ export const ModernLayout: React.FC<ModernLayoutProps> = ({
   onTabChange,
   testStatus 
 }) => {
-  const tabs = [
-    { id: 'configuration', label: '测试配置', icon: (
+  const tabs: { id: ModernLayoutTab; label: string; icon: JSX.Element }[] = [
+    {
+      id: 'configuration',
+      label: '测试配置',
+      icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
       </svg>
-    )},
-    { id: 'results', label: '测试结果', icon: (
+      ),
+    },
+    {
+      id: 'results',
+      label: '测试结果',
+      icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
       </svg>
-    )},
-    { id: 'charts', label: '图表分析', icon: (
+      ),
+    },
+    {
+      id: 'charts',
+      label: '图表分析',
+      icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
       </svg>
-    )},
+      ),
+    },
   ];
 
   return (
@@ -60,7 +74,7 @@ export const ModernLayout: React.FC<ModernLayoutProps> = ({
                 return (
                   <button
                     key={tab.id}
-                    onClick={() => onTabChange(tab.id as any)}
+                    onClick={() => onTabChange(tab.id)}
                     disabled={testStatus?.isRunning && tab.id !== 'configuration'}
                     className={`
                       relative flex items-center px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200

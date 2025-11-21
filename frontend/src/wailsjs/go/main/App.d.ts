@@ -1,3 +1,14 @@
+import type {
+  PersistedAppConfig,
+  TestConfiguration,
+  TestBatch,
+  TestResult,
+  TelemetryUpdate,
+  ProgressUpdate,
+  ComparisonResult,
+  ExportOptions,
+} from '../../../types';
+
 export function ValidateAPIKey(arg1:string,arg2:string):Promise<void>;
 export function GetAvailableModels(arg1:string,arg2:string):Promise<Array<string>>;
 export function StartSpeedTest(arg1:TestConfiguration):Promise<TestBatch>;
@@ -14,5 +25,5 @@ export function GetDefaultTestConfiguration():Promise<TestConfiguration>;
 export function GetPromptTypes():Promise<Array<string>>;
 export function GetDefaultPromptLengths():Promise<Array<number>>;
 export function ValidatePromptConfig(arg1:string,arg2:number):Promise<void>;
-export function GetAppConfig():Promise<any>;
-export function SaveAppConfig(arg1:any):Promise<void>;
+export function GetAppConfig():Promise<PersistedAppConfig>;
+export function SaveAppConfig(arg1:PersistedAppConfig):Promise<void>;

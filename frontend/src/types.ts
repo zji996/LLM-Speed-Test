@@ -6,6 +6,13 @@ export interface StepConfiguration {
   step: number;
 }
 
+export interface SavedApiConfig {
+  id: string;
+  name: string;
+  apiEndpoint: string;
+  apiKey: string;
+}
+
 export interface TestConfiguration {
   apiEndpoint: string;
   apiKey: string;
@@ -27,6 +34,22 @@ export interface TestConfiguration {
   concurrentTests: number; // Requests per round (base/fixed concurrency)
   timeout: number;         // Timeout in seconds
   headers?: Record<string, string>;
+}
+
+export interface PersistedTestState {
+  config: TestConfiguration;
+  mode: TestMode;
+  concurrencyStepConfig: StepConfiguration;
+  concurrencyStepCount: number;
+  inputStepConfig: StepConfiguration;
+  inputStepCount: number;
+}
+
+export interface PersistedAppConfig {
+  testState?: PersistedTestState;
+  savedApiConfigs?: SavedApiConfig[];
+  lastValidApiEndpoint?: string;
+  lastValidApiKey?: string;
 }
 
 export interface TestResult {

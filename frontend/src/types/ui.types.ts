@@ -51,6 +51,8 @@ export interface NavItem {
   icon: string;
 }
 
+import type { TestBatch } from './test.types';
+
 export interface SidebarProps {
   items: NavItem[];
   activeTab: string;
@@ -60,9 +62,9 @@ export interface SidebarProps {
     isRunning: boolean;
     status: string;
   };
-  completedBatches?: any[];
-  currentBatch?: any;
-  onBatchSelect?: (batch: any) => void;
+  completedBatches?: TestBatch[];
+  currentBatch?: TestBatch;
+  onBatchSelect?: (batch: TestBatch) => void;
   onStopTest?: () => void;
 }
 
