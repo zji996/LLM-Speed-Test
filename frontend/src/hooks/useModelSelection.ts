@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { ModelOption } from '../types';
 
 export interface ModelSelectionState {
@@ -12,7 +12,7 @@ export const useModelSelection = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchModels = async (endpoint: string, apiKey: string) => {
+  const fetchModels = useCallback(async (endpoint: string, apiKey: string) => {
     if (!apiKey) {
       setError('请输入API密钥');
       return;
@@ -38,7 +38,7 @@ export const useModelSelection = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   return {
     availableModels,

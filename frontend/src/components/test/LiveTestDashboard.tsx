@@ -1,9 +1,10 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { TestResult, TelemetryUpdate } from '../../types';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import Card from '../common/Card';
 import { MAX_LIVE_CHART_POINTS } from '../../utils/constants';
 import RealTimeMonitor from './RealTimeMonitor';
+import { useLiveTestMetrics } from '../../hooks/useLiveTestMetrics';
 
 interface LiveTestDashboardProps {
   isRunning: boolean;
@@ -20,48 +21,17 @@ const LiveTestDashboard: React.FC<LiveTestDashboardProps> = ({
   totalTests,
   completedCount
 }) => {
-  // Calculate real-time metrics
-  const currentTPS = useMemo(() => {
-    if (telemetry && telemetry.length > 0) {
-        return telemetry[telemetry.length - 1].instantTPS;
-    }
-    if (results.length === 0) return 0;
-    const recent = results.slice(-5);
-    const sum = recent.reduce((acc, r) => acc + (r.outputTokensPerSecond || 0), 0);
-    return sum / recent.length;
-  }, [results, telemetry]);
-
-  const averageLatency = useMemo(() => {
-    if (telemetry && telemetry.length > 0) {
-        const latest = telemetry[telemetry.length - 1];
-        // Note: Telemetry has TTFT (avg), but results has Total Latency. 
-        // We should probably stick to results for "Total Latency Avg" as TTFT is different.
-        // But RealTimeMonitor shows TTFT. 
-        // Let's keep this card showing Total Latency from results, as it is "Average Latency" (usually implies total).
-    }
-    if (results.length === 0) return 0;
-    const sum = results.reduce((acc, r) => acc + (r.totalLatency || 0), 0);
-    return sum / results.length;
-  }, [results, telemetry]);
-
-  const successRate = useMemo(() => {
-    if (results.length === 0) return 100;
-    const success = results.filter(r => r.success).length;
-    return (success / results.length) * 100;
-  }, [results]);
-
-  const chartData = useMemo(() => {
-    const startIdx = Math.max(0, results.length - MAX_LIVE_CHART_POINTS);
-    return results.slice(-MAX_LIVE_CHART_POINTS).map((r, i) => ({
-      id: startIdx + i + 1,
-      tps: r.outputTokensPerSecond || 0,
-      latency: r.totalLatency || 0
-    }));
-  }, [results]);
+  const {
+    hasTelemetry,
+    currentTPS,
+    averageLatency,
+    successRate,
+    chartData,
+  } = useLiveTestMetrics(results, telemetry);
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {telemetry && telemetry.length > 0 && (
+      {hasTelemetry && telemetry && telemetry.length > 0 && (
           <RealTimeMonitor history={telemetry} />
       )}
 

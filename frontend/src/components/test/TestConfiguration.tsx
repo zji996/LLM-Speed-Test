@@ -1,11 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { TestConfiguration, StepConfiguration, TestMode } from '../../types';
-import { useModelSelection } from '../../hooks';
+import React from 'react';
+import { TestConfiguration } from '../../types';
 import { Button, Card, Input, Select } from '../common';
-import { PROMPT_LENGTHS } from '../../utils';
-
-const MAX_TEST_ROUNDS = 100;
-const MAX_CONCURRENT_TESTS = 50;
+import { useTestConfiguration, MAX_CONCURRENT_TESTS, MAX_TEST_ROUNDS } from '../../hooks/useTestConfiguration';
 
 interface TestConfigurationProps {
   onStartTest: (config: TestConfiguration) => void;
@@ -13,253 +9,34 @@ interface TestConfigurationProps {
 }
 
 const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartTest, isRunning }) => {
-  const [mode, setMode] = useState<TestMode>('normal');
-
-  // Separate step configs for different modes so that
-  // switching tabs does not leak values between modes.
-  const [concurrencyStepConfig, setConcurrencyStepConfig] = useState<StepConfiguration>({
-    start: 1,
-    end: 10,
-    step: 1
-  });
-  const [concurrencyStepCount, setConcurrencyStepCount] = useState<number>(10);
-
-  // Input-length step defaults: start at 2048 tokens,
-  // step by 2048 tokens. The end value will be derived
-  // from start + step * (count - 1) when starting tests.
-  const [inputStepConfig, setInputStepConfig] = useState<StepConfiguration>({
-    start: 2048,
-    end: 2048 * 3,
-    step: 2048
-  });
-  const [inputStepCount, setInputStepCount] = useState<number>(3);
-
-  const [config, setConfig] = useState<TestConfiguration>({
-    apiEndpoint: 'https://api.openai.com/v1',
-    apiKey: '',
-    model: '',
-    promptType: 'fixed',
-    promptLength: 512,
-    prompt: '',
-    maxTokens: 128,
-    temperature: 1.0,
-    topP: 0.1,
-    presencePenalty: -1.0,
-    frequencyPenalty: -1.0,
-    testMode: 'normal',
-    stepConfig: { start: 1, end: 10, step: 1 },
-    testCount: 2,
-    concurrentTests: 3,
-    timeout: 60,
-    headers: {}
-  });
-
-  const { availableModels, isLoading, error, fetchModels } = useModelSelection();
-  const [isValidating, setIsValidating] = useState(false);
-  const [validationError, setValidationError] = useState<string>('');
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [customHeaders, setCustomHeaders] = useState<string>('');
-
-  useEffect(() => {
-    const loadDefaults = async () => {
-      try {
-        const { GetDefaultTestConfiguration } = await import('../../../wailsjs/go/main/App');
-        const defaultConfig = await GetDefaultTestConfiguration() as TestConfiguration;
-        const savedEndpoint = localStorage.getItem('apiEndpoint');
-        const savedApiKey = localStorage.getItem('apiKey');
-        const savedModel = localStorage.getItem('selectedModel');
-        const savedStateRaw = localStorage.getItem('testConfigStateV1');
-
-        let mergedConfig: TestConfiguration = {
-          ...defaultConfig,
-          apiEndpoint: savedEndpoint || defaultConfig.apiEndpoint,
-          apiKey: savedApiKey || defaultConfig.apiKey,
-          model: savedModel || '',
-          promptType: 'fixed',
-          prompt: '',
-          testMode: 'normal',
-          stepConfig: { start: 1, end: 10, step: 1 }
-        };
-
-        let restoredMode: TestMode = 'normal';
-
-        if (savedStateRaw) {
-          try {
-            const savedState = JSON.parse(savedStateRaw);
-            if (savedState.config) {
-              mergedConfig = {
-                ...mergedConfig,
-                ...savedState.config
-              };
-            }
-            if (savedState.mode) {
-              restoredMode = savedState.mode as TestMode;
-            }
-            if (savedState.concurrencyStepConfig) {
-              setConcurrencyStepConfig(savedState.concurrencyStepConfig as StepConfiguration);
-            }
-            if (typeof savedState.concurrencyStepCount === 'number') {
-              setConcurrencyStepCount(savedState.concurrencyStepCount as number);
-            }
-            if (savedState.inputStepConfig) {
-              setInputStepConfig(savedState.inputStepConfig as StepConfiguration);
-            }
-            if (typeof savedState.inputStepCount === 'number') {
-              setInputStepCount(savedState.inputStepCount as number);
-            }
-          } catch (e) {
-            console.warn('Failed to restore saved test configuration state:', e);
-          }
-        }
-
-        // Ensure fixed prompt settings regardless of saved state
-        mergedConfig = {
-          ...mergedConfig,
-          promptType: 'fixed',
-          prompt: '',
-          testMode: 'normal'
-        };
-
-        setConfig(mergedConfig);
-        setMode(restoredMode);
-
-        if (savedApiKey && savedEndpoint) {
-          fetchModels(savedEndpoint, savedApiKey);
-        }
-      } catch (error) {
-        console.error('Failed to load defaults:', error);
-      }
-    };
-
-    loadDefaults();
-  }, []);
-
-  // Persist configuration and step settings so they survive
-  // component remounts (e.g., when navigating to results tab).
-  useEffect(() => {
-    try {
-      const stateToSave = {
-        config,
-        mode,
-        concurrencyStepConfig,
-        concurrencyStepCount,
-        inputStepConfig,
-        inputStepCount
-      };
-      localStorage.setItem('testConfigStateV1', JSON.stringify(stateToSave));
-    } catch (error) {
-      console.warn('Failed to persist test configuration state:', error);
-    }
-  }, [config, mode, concurrencyStepConfig, concurrencyStepCount, inputStepConfig, inputStepCount]);
-
-  const handleInputChange = (field: keyof TestConfiguration, value: any) => {
-    setConfig(prev => {
-      const newConfig = { ...prev, [field]: value };
-      if (field === 'apiEndpoint') localStorage.setItem('apiEndpoint', value);
-      if (field === 'apiKey') localStorage.setItem('apiKey', value);
-      if (field === 'model') {
-        if (value) localStorage.setItem('selectedModel', value);
-        else localStorage.removeItem('selectedModel');
-      }
-      return newConfig;
-    });
-  };
-
-  const handleValidateAPI = async () => {
-    if (!config.apiKey) {
-      setValidationError('请输入API密钥');
-      return;
-    }
-
-    setIsValidating(true);
-    setValidationError('');
-
-    try {
-      const { ValidateAPIKey } = await import('../../../wailsjs/go/main/App');
-      await ValidateAPIKey(config.apiEndpoint, config.apiKey);
-      await fetchModels(config.apiEndpoint, config.apiKey);
-    } catch (error) {
-      setValidationError(`API验证失败: ${error}`);
-    } finally {
-      setIsValidating(false);
-    }
-  };
-
-  const handleStartTest = async () => {
-    if (!config.apiKey) return setValidationError('请输入API密钥');
-    if (!config.model) return setValidationError('请选择模型');
-    
-    const isModelValid = availableModels.some(m => m.id === config.model);
-    if (!isModelValid) return setValidationError(`选择的模型 "${config.model}" 不在可用模型列表中，请先验证API`);
-
-    if (config.testCount < 1 || config.testCount > MAX_TEST_ROUNDS) {
-      return setValidationError(`测试轮次必须在1-${MAX_TEST_ROUNDS}之间`);
-    }
-
-    try {
-      const { ValidatePromptConfig } = await import('../../../wailsjs/go/main/App');
-      await ValidatePromptConfig(config.promptType, config.promptLength);
-    } catch (error) {
-      return setValidationError(`提示词配置错误: ${error}`);
-    }
-
-    let headers = {};
-    if (customHeaders.trim()) {
-      try {
-        headers = JSON.parse(customHeaders);
-      } catch (error) {
-        return setValidationError('自定义请求头格式错误');
-      }
-    }
-
-    // Derive active step config based on mode so that
-    // concurrency step and input length step can have
-    // independent ranges and defaults.
-    let activeStepConfig: StepConfiguration = config.stepConfig;
-
-    if (mode === 'concurrency_step') {
-      const safeCount = Math.max(1, concurrencyStepCount || 1);
-      const safeStart = concurrencyStepConfig.start > 0 ? concurrencyStepConfig.start : 1;
-      const safeStep = concurrencyStepConfig.step > 0 ? concurrencyStepConfig.step : 1;
-      const derivedEnd = safeStart + safeStep * (safeCount - 1);
-      activeStepConfig = {
-        start: safeStart,
-        end: derivedEnd,
-        step: safeStep
-      };
-    } else if (mode === 'input_step') {
-      const safeCount = Math.max(1, inputStepCount || 1);
-      const safeStart = inputStepConfig.start > 0 ? inputStepConfig.start : 2048;
-      const safeStep = inputStepConfig.step > 0 ? inputStepConfig.step : 2048;
-      const derivedEnd = safeStart + safeStep * (safeCount - 1);
-      activeStepConfig = {
-        start: safeStart,
-        end: derivedEnd,
-        step: safeStep
-      };
-    }
-
-    // Validate Step Config
-    if (mode !== 'normal') {
-      if (activeStepConfig.start <= 0 || activeStepConfig.end < activeStepConfig.start || activeStepConfig.step <= 0) {
-        return setValidationError('步进配置无效: 请检查起始值、结束值和步长');
-      }
-    }
-
-    const finalConfig: TestConfiguration = {
-      ...config,
-      testMode: mode,
-      stepConfig: activeStepConfig,
-      promptType: 'fixed',
-      prompt: '',
-      headers
-    };
-
-    onStartTest(finalConfig);
-  };
-
-  const modelOptions = availableModels.map(model => ({ value: model.id, label: model.name }));
-  const promptLengthOptions = PROMPT_LENGTHS.map(length => ({ value: length.toString(), label: `${length} tokens` }));
+  const {
+    mode,
+    setMode,
+    config,
+    setConfig,
+    concurrencyStepConfig,
+    setConcurrencyStepConfig,
+    concurrencyStepCount,
+    setConcurrencyStepCount,
+    inputStepConfig,
+    setInputStepConfig,
+    inputStepCount,
+    setInputStepCount,
+    isValidating,
+    validationError,
+    setValidationError,
+    showAdvanced,
+    setShowAdvanced,
+    customHeaders,
+    setCustomHeaders,
+    isLoadingModels,
+    modelError,
+    modelOptions,
+    promptLengthOptions,
+    handleInputChange,
+    handleValidateAPI,
+    handleStartTest,
+  } = useTestConfiguration({ onStartTest });
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-fade-in pb-20">
@@ -333,14 +110,14 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
             }
           >
             <div className="space-y-5">
-              <Select
+                <Select
                 label="选择模型"
                 value={config.model}
                 onChange={(value) => handleInputChange('model', value)}
                 options={modelOptions}
                 disabled={isRunning}
                 required
-                placeholder={availableModels.length === 0 ? "请先验证 API..." : "请选择模型..."}
+                placeholder={modelOptions.length === 0 ? "请先验证 API..." : "请选择模型..."}
               />
               <Select
                 label="输入长度 (Prompt Tokens)"

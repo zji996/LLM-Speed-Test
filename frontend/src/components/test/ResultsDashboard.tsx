@@ -1,8 +1,13 @@
-import React, { useMemo, useState } from 'react';
-import { TestBatch, ExportFormat, ExportOptions, RoundSummary } from '../../types';
-import { computeRoundSummaries } from '../../utils/roundSummary';
+import React, { useState } from 'react';
+import { TestBatch, ExportFormat, ExportOptions } from '../../types';
 import StepPerformanceChart from './StepPerformanceChart';
 import { Button, Card, Select } from '../common';
+import { useResultsDashboardData } from '../../hooks/useResultsDashboardData';
+import {
+  formatDuration as formatDurationRaw,
+  formatRate as formatRateRaw,
+  formatPercentage as formatPercentageRaw,
+} from '../../utils/formatters';
 
 type ResultsMode = 'single' | 'auto';
 
@@ -16,9 +21,7 @@ interface ResultsDashboardProps {
 const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ batch, allBatches, mode = 'single', onExport }) => {
   const [exportFormat, setExportFormat] = useState<ExportFormat>('csv');
   const [isExporting, setIsExporting] = useState(false);
-  const roundSummaries = useMemo<RoundSummary[]>(() => computeRoundSummaries(batch), [batch]);
-
-  const isStepTest = batch.configuration.testMode === 'concurrency_step' || batch.configuration.testMode === 'input_step';
+  const { isStepTest, summary, roundSummaries } = useResultsDashboardData(batch);
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -37,19 +40,17 @@ const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ batch, allBatches, 
 
   const formatDuration = (ms?: number): string => {
     if (ms === undefined || ms === null || isNaN(ms)) return '--';
-    if (ms < 1) return `${ms.toFixed(2)}ms`;
-    if (ms < 1000) return `${Math.round(ms)}ms`;
-    return `${(ms / 1000).toFixed(2)}s`;
+    return formatDurationRaw(ms);
   };
 
   const formatRate = (rate?: number): string => {
     if (rate === undefined || rate === null || !Number.isFinite(rate)) return '0.00';
-    return rate.toFixed(2);
+    return formatRateRaw(rate);
   };
 
   const formatPercentage = (rate: number): string => {
     if (!Number.isFinite(rate)) return '0.0%';
-    return `${(rate * 100).toFixed(1)}%`;
+    return formatPercentageRaw(rate);
   };
 
   const formatTokens = (tokens?: number): string => {
@@ -87,25 +88,25 @@ const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ batch, allBatches, 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card className="bg-white/5 border border-white/10">
           <div className="text-[var(--color-primary)] text-xs font-bold uppercase tracking-wider">总测试数</div>
-          <div className="text-4xl font-black text-white mt-2">{batch.summary.totalTests}</div>
+          <div className="text-4xl font-black text-white mt-2">{summary.totalTests}</div>
           <div className="text-xs text-gray-500 mt-1">Total Tests</div>
         </Card>
 
         <Card className="bg-[var(--color-success)]/10 border border-[var(--color-success)]/20">
           <div className="text-[var(--color-success)] text-xs font-bold uppercase tracking-wider">成功测试</div>
-          <div className="text-4xl font-black text-white mt-2">{batch.summary.successfulTests}</div>
+          <div className="text-4xl font-black text-white mt-2">{summary.successfulTests}</div>
           <div className="text-xs text-gray-500 mt-1">Successful</div>
         </Card>
 
         <Card className="bg-[var(--color-error)]/10 border border-[var(--color-error)]/20">
           <div className="text-[var(--color-error)] text-xs font-bold uppercase tracking-wider">失败测试</div>
-          <div className="text-4xl font-black text-white mt-2">{batch.summary.failedTests}</div>
+          <div className="text-4xl font-black text-white mt-2">{summary.failedTests}</div>
           <div className="text-xs text-gray-500 mt-1">Failed</div>
         </Card>
 
         <Card className="bg-[var(--color-warning)]/10 border border-[var(--color-warning)]/20">
           <div className="text-[var(--color-warning)] text-xs font-bold uppercase tracking-wider">错误率</div>
-          <div className="text-4xl font-black text-white mt-2">{formatPercentage(batch.summary.errorRate)}</div>
+          <div className="text-4xl font-black text-white mt-2">{formatPercentage(summary.errorRate)}</div>
           <div className="text-xs text-gray-500 mt-1">Error Rate</div>
         </Card>
       </div>

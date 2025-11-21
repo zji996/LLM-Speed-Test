@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { ExportFormat, ExportOptions, TestBatch } from '../../types';
 import ResultsChart from './ResultsChart';
 import StepPerformanceChart from './StepPerformanceChart';
 import { Button, Card, Select } from '../common';
+import { usePerformanceChartsData } from '../../hooks/usePerformanceChartsData';
 
 type ChartsMode = 'single' | 'auto';
 
@@ -17,30 +18,12 @@ const PerformanceCharts: React.FC<PerformanceChartsProps> = ({ batch, onExport, 
   const [exportFormat, setExportFormat] = useState<ExportFormat>('png');
   const [isExporting, setIsExporting] = useState(false);
 
-  const totalTests = batch.summary.totalTests || batch.results.length;
-  const successRate = totalTests > 0
-    ? ((batch.summary.successfulTests / totalTests) * 100).toFixed(1)
-    : '0.0';
-
-  const isStepTest = batch.configuration.testMode === 'concurrency_step' || batch.configuration.testMode === 'input_step';
-
-  const infoBadges = useMemo(() => ([
-    {
-      label: '模型',
-      value: batch.configuration.model || '未指定',
-      className: 'text-[var(--color-primary)] bg-[var(--color-primary)]/10 border-[var(--color-primary)]/20',
-    },
-    {
-      label: '样本数',
-      value: `${totalTests}`,
-      className: 'text-white bg-white/10 border-white/20',
-    },
-    {
-      label: '成功率',
-      value: `${successRate}%`,
-      className: `text-${Number(successRate) > 90 ? '[var(--color-success)]' : '[var(--color-warning)]'} bg-white/5`,
-    },
-  ]), [batch, successRate, totalTests]);
+  const {
+    isStepTest,
+    totalTests,
+    successRate,
+    infoBadges,
+  } = usePerformanceChartsData(batch);
 
   const handleExport = async () => {
     setIsExporting(true);

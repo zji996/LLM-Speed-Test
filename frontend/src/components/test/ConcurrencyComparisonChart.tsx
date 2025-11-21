@@ -12,37 +12,16 @@ import {
 } from 'recharts';
 import { TestBatch } from '../../types';
 import { Card } from '../common';
+import { useConcurrencyComparisonData } from '../../hooks/useConcurrencyComparisonData';
 
 interface ConcurrencyComparisonChartProps {
   batches: TestBatch[];
 }
 
 const ConcurrencyComparisonChart: React.FC<ConcurrencyComparisonChartProps> = ({ batches }) => {
-  const data = React.useMemo(() => {
-    if (!batches || batches.length === 0) return [];
-    return batches
-      .filter(b => b.results && b.results.length > 0)
-      .map(batch => ({
-        id: batch.id,
-        concurrency: batch.configuration.concurrentTests,
-        latency: batch.summary.averageLatency,
-        throughput: batch.summary.averageThroughput,
-        roundThroughput: batch.summary.averageRoundThroughput,
-        errorRate: batch.summary.errorRate * 100,
-        model: batch.configuration.model
-      }))
-      .sort((a, b) => a.concurrency - b.concurrency);
-  }, [batches]);
+  const { points, bestConcurrency } = useConcurrencyComparisonData(batches);
 
-  const bestConcurrency = React.useMemo(() => {
-    if (data.length < 2) return null;
-    const maxThroughput = Math.max(...data.map(d => d.roundThroughput));
-    const topTier = data.filter(d => d.roundThroughput >= maxThroughput * 0.95);
-    const best = topTier.sort((a, b) => a.latency - b.latency)[0];
-    return best;
-  }, [data]);
-
-  if (data.length < 2) {
+  if (points.length < 2) {
     return (
       <Card className="border-dashed border-white/10 bg-transparent text-center py-12">
         <div className="text-gray-500 mb-2">暂无足够对比数据</div>
@@ -70,7 +49,7 @@ const ConcurrencyComparisonChart: React.FC<ConcurrencyComparisonChartProps> = ({
       <div className="h-[400px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
-            data={data}
+            data={points}
             margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
           >
             <defs>

@@ -1,139 +1,17 @@
 import React, { useMemo } from 'react';
-import { RoundSummary, TestBatch } from '../../types';
-import { computeRoundSummaries } from '../../utils/roundSummary';
+import { TestBatch } from '../../types';
 import { Card } from '../common';
-
-type ChartMetric = 'latency' | 'throughput' | 'roundThroughput';
+import { ChartMetric, formatDisplayValue, useResultsChartData } from '../../hooks/useResultsChartData';
 
 interface ResultsChartProps {
   batch: TestBatch;
   chartType: ChartMetric;
 }
 
-type BatchResult = TestBatch['results'][number];
-type BatchSummary = TestBatch['summary'];
-
-interface ChartConfig {
-  label: string;
-  description: string;
-  accessor?: (result: BatchResult) => number;
-  roundAccessor?: (round: RoundSummary) => number;
-  summary: (summary: BatchSummary) => { average?: number; min?: number; max?: number };
-  better: 'higher' | 'lower';
-  chipLabel: string;
-  bestLabel: string;
-  color: {
-    line: string;
-    dot: string;
-    gradientFrom: string;
-    gradientTo: string;
-  };
-}
-
-const CHART_CONFIG: Record<ChartMetric, ChartConfig> = {
-  latency: {
-    label: '响应延迟趋势',
-    description: '展示每次测试的总耗时（TTFT + 解码），数值越低代表响应越快',
-    accessor: (result) => result.totalLatency,
-    summary: (summary) => ({
-      average: summary.averageLatency,
-      min: summary.minLatency,
-      max: summary.maxLatency,
-    }),
-    better: 'lower',
-    chipLabel: '最新延迟',
-    bestLabel: '最低延迟',
-    color: {
-      line: '#f59e0b', // Warning/Orange
-      dot: '#d97706',
-      gradientFrom: 'rgba(245, 158, 11, 0.5)',
-      gradientTo: 'rgba(245, 158, 11, 0.05)',
-    },
-  },
-  throughput: {
-    label: '吞吐性能趋势',
-    description: '展示模型在解码阶段的吞吐表现（tokens/sec），数值越高越好',
-    accessor: (result) => result.throughput,
-    summary: (summary) => ({
-      average: summary.averageThroughput,
-      min: summary.minThroughput,
-      max: summary.maxThroughput,
-    }),
-    better: 'higher',
-    chipLabel: '最新吞吐',
-    bestLabel: '最高吞吐',
-    color: {
-      line: '#06b6d4', // Primary/Cyan
-      dot: '#0891b2',
-      gradientFrom: 'rgba(6, 182, 212, 0.5)',
-      gradientTo: 'rgba(6, 182, 212, 0.05)',
-    },
-  },
-  roundThroughput: {
-    label: '轮次总吞吐趋势',
-    description: '展示每个测试轮中所有并发请求的输出吞吐总和，用于衡量整体并发能力',
-    roundAccessor: (round) => round.totalOutputTokensPerSecond,
-    summary: (summary) => ({
-      average: summary.averageRoundThroughput,
-      min: summary.minRoundThroughput,
-      max: summary.maxRoundThroughput,
-    }),
-    better: 'higher',
-    chipLabel: '最新轮次吞吐',
-    bestLabel: '最高轮次吞吐',
-    color: {
-      line: '#8b5cf6', // Secondary/Purple
-      dot: '#7c3aed',
-      gradientFrom: 'rgba(139, 92, 246, 0.5)',
-      gradientTo: 'rgba(139, 92, 246, 0.05)',
-    },
-  },
-};
-
-const formatDisplayValue = (type: ChartMetric, value?: number | null): string => {
-  if (value === undefined || value === null || Number.isNaN(value)) {
-    return '--';
-  }
-
-  if (type === 'latency') {
-    if (value >= 1000) {
-      return `${(value / 1000).toFixed(2)}s`;
-    }
-    return `${Math.round(value)}ms`;
-  }
-
-  return `${value.toFixed(2)} T/s`;
-};
-
 const ResultsChart: React.FC<ResultsChartProps> = ({ batch, chartType }) => {
-  const config = CHART_CONFIG[chartType];
-  const roundSummaries = useMemo(() => computeRoundSummaries(batch), [batch]);
-  const chartPoints = useMemo(() => {
-    if (config.roundAccessor) {
-      return roundSummaries
-        .map((round) => ({
-          label: `R${round.roundNumber}`,
-          value: config.roundAccessor ? config.roundAccessor(round) : 0,
-          success: round.totalRequests > 0,
-        }))
-        .filter(point => point.success && Number.isFinite(point.value));
-    }
+  const { config, points, summary, hasData } = useResultsChartData(batch, chartType);
 
-    if (!config.accessor) {
-      return [];
-    }
-
-    return batch.results
-      .map((result, index) => ({
-        label: `#${index + 1}`,
-        value: config.accessor ? config.accessor(result) : 0,
-        success: result.success,
-      }))
-      .filter(point => point.success && Number.isFinite(point.value));
-  }, [batch, chartType, config, roundSummaries]);
-
-  const hasData = chartPoints.length > 0;
-  const values = chartPoints.map(point => point.value);
+  const values = useMemo(() => points.map(point => point.value), [points]);
 
   let minValue = hasData ? Math.min(...values) : 0;
   let maxValue = hasData ? Math.max(...values) : 1;
@@ -152,11 +30,11 @@ const ResultsChart: React.FC<ResultsChartProps> = ({ batch, chartType }) => {
   const plotWidth = chartWidth - padding.left - padding.right;
   const plotHeight = chartHeight - padding.top - padding.bottom;
   const range = Math.max(maxValue - minValue, 1);
-  const denominator = Math.max(chartPoints.length - 1, 1);
+  const denominator = Math.max(points.length - 1, 1);
 
-  const plottedPoints = chartPoints.map((point, index) => {
+  const plottedPoints = points.map((point, index) => {
     const normalized = range === 0 ? 0 : (point.value - minValue) / range;
-    const x = chartPoints.length === 1
+    const x = points.length === 1
       ? padding.left + plotWidth / 2
       : padding.left + (plotWidth / denominator) * index;
     const y = padding.top + plotHeight - normalized * plotHeight;
@@ -194,7 +72,6 @@ const ResultsChart: React.FC<ResultsChartProps> = ({ batch, chartType }) => {
     return point.value > best.value ? point : best;
   }, plottedPoints[0]);
 
-  const summary = config.summary(batch.summary);
   const gradientId = `chart-gradient-${chartType}`;
 
   return (
