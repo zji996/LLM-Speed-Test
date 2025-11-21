@@ -14,3 +14,5 @@ export function GetDefaultTestConfiguration():Promise<TestConfiguration>;
 export function GetPromptTypes():Promise<Array<string>>;
 export function GetDefaultPromptLengths():Promise<Array<number>>;
 export function ValidatePromptConfig(arg1:string,arg2:number):Promise<void>;
+export function GetAppConfig():Promise<any>;
+export function SaveAppConfig(arg1:any):Promise<void>;

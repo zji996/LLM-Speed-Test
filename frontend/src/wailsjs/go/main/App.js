@@ -141,3 +141,20 @@ export function GetDefaultPromptLengths() {
 export function ValidatePromptConfig(promptType, promptLength) {
   return window.go.main.App.ValidatePromptConfig(promptType, promptLength);
 }
+
+/**
+ * Get persisted application configuration from disk.
+ * @returns {Promise<any>} - Raw AppConfig JSON
+ */
+export function GetAppConfig() {
+  return window.go.main.App.GetAppConfig();
+}
+
+/**
+ * Persist application configuration to disk.
+ * @param {any} config - AppConfig JSON
+ * @returns {Promise<void>}
+ */
+export function SaveAppConfig(config) {
+  return window.go.main.App.SaveAppConfig(config);
+}

@@ -14,6 +14,10 @@ export function GetAllTestBatches() {
   return window['go']['main']['App']['GetAllTestBatches']();
 }
 
+export function GetAppConfig() {
+  return window['go']['main']['App']['GetAppConfig']();
+}
+
 export function GetAvailableModels(arg1, arg2) {
   return window['go']['main']['App']['GetAvailableModels'](arg1, arg2);
 }
@@ -48,6 +52,10 @@ export function GetTestProgress() {
 
 export function GetTestResults() {
   return window['go']['main']['App']['GetTestResults']();
+}
+
+export function SaveAppConfig(arg1) {
+  return window['go']['main']['App']['SaveAppConfig'](arg1);
 }
 
 export function Shutdown() {

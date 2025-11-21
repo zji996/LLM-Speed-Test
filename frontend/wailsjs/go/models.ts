@@ -1,5 +1,177 @@
 export namespace main {
 	
+	export class SavedAPIConfig {
+	    id: string;
+	    name: string;
+	    apiEndpoint: string;
+	    apiKey: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SavedAPIConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.apiEndpoint = source["apiEndpoint"];
+	        this.apiKey = source["apiKey"];
+	    }
+	}
+	export class StepConfiguration {
+	    start: number;
+	    end: number;
+	    step: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new StepConfiguration(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.start = source["start"];
+	        this.end = source["end"];
+	        this.step = source["step"];
+	    }
+	}
+	export class TestConfiguration {
+	    apiEndpoint: string;
+	    apiKey: string;
+	    model: string;
+	    promptType: string;
+	    promptLength: number;
+	    prompt: string;
+	    maxTokens: number;
+	    temperature: number;
+	    topP: number;
+	    presencePenalty: number;
+	    frequencyPenalty: number;
+	    testMode: string;
+	    stepConfig: StepConfiguration;
+	    testCount: number;
+	    concurrentTests: number;
+	    timeout: number;
+	    headers?: Record<string, string>;
+	
+	    static createFrom(source: any = {}) {
+	        return new TestConfiguration(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.apiEndpoint = source["apiEndpoint"];
+	        this.apiKey = source["apiKey"];
+	        this.model = source["model"];
+	        this.promptType = source["promptType"];
+	        this.promptLength = source["promptLength"];
+	        this.prompt = source["prompt"];
+	        this.maxTokens = source["maxTokens"];
+	        this.temperature = source["temperature"];
+	        this.topP = source["topP"];
+	        this.presencePenalty = source["presencePenalty"];
+	        this.frequencyPenalty = source["frequencyPenalty"];
+	        this.testMode = source["testMode"];
+	        this.stepConfig = this.convertValues(source["stepConfig"], StepConfiguration);
+	        this.testCount = source["testCount"];
+	        this.concurrentTests = source["concurrentTests"];
+	        this.timeout = source["timeout"];
+	        this.headers = source["headers"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class TestUIState {
+	    config: TestConfiguration;
+	    mode: string;
+	    concurrencyStepConfig: StepConfiguration;
+	    concurrencyStepCount: number;
+	    inputStepConfig: StepConfiguration;
+	    inputStepCount: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TestUIState(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.config = this.convertValues(source["config"], TestConfiguration);
+	        this.mode = source["mode"];
+	        this.concurrencyStepConfig = this.convertValues(source["concurrencyStepConfig"], StepConfiguration);
+	        this.concurrencyStepCount = source["concurrencyStepCount"];
+	        this.inputStepConfig = this.convertValues(source["inputStepConfig"], StepConfiguration);
+	        this.inputStepCount = source["inputStepCount"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class AppConfig {
+	    testState: TestUIState;
+	    savedApiConfigs: SavedAPIConfig[];
+	    lastValidApiEndpoint: string;
+	    lastValidApiKey: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AppConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.testState = this.convertValues(source["testState"], TestUIState);
+	        this.savedApiConfigs = this.convertValues(source["savedApiConfigs"], SavedAPIConfig);
+	        this.lastValidApiEndpoint = source["lastValidApiEndpoint"];
+	        this.lastValidApiKey = source["lastValidApiKey"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class ComparisonSummary {
 	    bestLatencyBatchId: string;
 	    bestThroughputBatchId: string;
@@ -184,84 +356,6 @@ export namespace main {
 		    return a;
 		}
 	}
-	export class StepConfiguration {
-	    start: number;
-	    end: number;
-	    step: number;
-	
-	    static createFrom(source: any = {}) {
-	        return new StepConfiguration(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.start = source["start"];
-	        this.end = source["end"];
-	        this.step = source["step"];
-	    }
-	}
-	export class TestConfiguration {
-	    apiEndpoint: string;
-	    apiKey: string;
-	    model: string;
-	    promptType: string;
-	    promptLength: number;
-	    prompt: string;
-	    maxTokens: number;
-	    temperature: number;
-	    topP: number;
-	    presencePenalty: number;
-	    frequencyPenalty: number;
-	    testMode: string;
-	    stepConfig: StepConfiguration;
-	    testCount: number;
-	    concurrentTests: number;
-	    timeout: number;
-	    headers?: Record<string, string>;
-	
-	    static createFrom(source: any = {}) {
-	        return new TestConfiguration(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.apiEndpoint = source["apiEndpoint"];
-	        this.apiKey = source["apiKey"];
-	        this.model = source["model"];
-	        this.promptType = source["promptType"];
-	        this.promptLength = source["promptLength"];
-	        this.prompt = source["prompt"];
-	        this.maxTokens = source["maxTokens"];
-	        this.temperature = source["temperature"];
-	        this.topP = source["topP"];
-	        this.presencePenalty = source["presencePenalty"];
-	        this.frequencyPenalty = source["frequencyPenalty"];
-	        this.testMode = source["testMode"];
-	        this.stepConfig = this.convertValues(source["stepConfig"], StepConfiguration);
-	        this.testCount = source["testCount"];
-	        this.concurrentTests = source["concurrentTests"];
-	        this.timeout = source["timeout"];
-	        this.headers = source["headers"];
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
 	export class TestBatch {
 	    id: string;
 	    startTime: string;
@@ -377,6 +471,7 @@ export namespace main {
 	}
 	
 	
+	
 	export class TelemetryUpdate {
 	    timestamp: number;
 	    activeTests: number;
@@ -407,6 +502,7 @@ export namespace main {
 	        this.stepTotal = source["stepTotal"];
 	    }
 	}
+	
 	
 	
 	

@@ -8,6 +8,8 @@ export function ExportTestData(arg1:string,arg2:string,arg3:main.ExportOptions):
 
 export function GetAllTestBatches():Promise<Array<main.TestBatch>>;
 
+export function GetAppConfig():Promise<main.AppConfig>;
+
 export function GetAvailableModels(arg1:string,arg2:string):Promise<Array<string>>;
 
 export function GetDefaultPromptLengths():Promise<Array<number>>;
@@ -25,6 +27,8 @@ export function GetTestBatch(arg1:string):Promise<main.TestBatch>;
 export function GetTestProgress():Promise<Array<main.ProgressUpdate>>;
 
 export function GetTestResults():Promise<Array<main.TestResult>>;
+
+export function SaveAppConfig(arg1:main.AppConfig):Promise<void>;
 
 export function Shutdown():Promise<void>;
 

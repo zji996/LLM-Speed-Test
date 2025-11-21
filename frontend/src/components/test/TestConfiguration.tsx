@@ -36,7 +36,24 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
     handleInputChange,
     handleValidateAPI,
     handleStartTest,
+    savedConfigs,
+    saveCurrentConfig,
+    deleteConfig,
+    loadConfig,
+    resetToDefaults,
   } = useTestConfiguration({ onStartTest });
+
+  const [showSaveDialog, setShowSaveDialog] = React.useState(false);
+  const [newConfigName, setNewConfigName] = React.useState('');
+  const [selectedSavedConfigId, setSelectedSavedConfigId] = React.useState('');
+
+  const handleSaveConfig = () => {
+    if (newConfigName.trim()) {
+      saveCurrentConfig(newConfigName.trim());
+      setNewConfigName('');
+      setShowSaveDialog(false);
+    }
+  };
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-fade-in pb-20">
@@ -75,6 +92,36 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
                 disabled={isRunning}
                 required
               />
+
+              {/* Saved Configs Dropdown */}
+              <div className="flex items-end gap-3">
+                <div className="flex-1">
+                  <Select
+                    label="已保存的配置"
+                    value={selectedSavedConfigId}
+                    onChange={(value) => {
+                      setSelectedSavedConfigId(value);
+                      if (value) loadConfig(value);
+                    }}
+                    options={savedConfigs.map(c => ({ value: c.id, label: c.name }))}
+                    placeholder={savedConfigs.length === 0 ? '暂无已保存的配置' : '选择已保存的配置...'}
+                    disabled={isRunning || savedConfigs.length === 0}
+                  />
+                </div>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    if (!selectedSavedConfigId) return;
+                    deleteConfig(selectedSavedConfigId);
+                    setSelectedSavedConfigId('');
+                  }}
+                  disabled={isRunning || !selectedSavedConfigId}
+                  size="sm"
+                >
+                  删除当前
+                </Button>
+              </div>
+
               <div className="flex gap-3 pt-2">
                  <Button 
                    onClick={handleValidateAPI} 
@@ -83,6 +130,13 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
                    className="flex-1"
                  >
                    验证连接 & 获取模型
+                 </Button>
+                 <Button 
+                   variant="secondary"
+                   onClick={() => setShowSaveDialog(true)}
+                   disabled={isRunning || !config.apiEndpoint || !config.apiKey}
+                 >
+                   保存配置
                  </Button>
                  <Button 
                    variant="secondary"
@@ -98,6 +152,38 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
               </div>
             </div>
           </Card>
+
+          {/* Save Config Dialog */}
+          {showSaveDialog && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
+              <div className="bg-gray-900 p-6 rounded-xl border border-white/10 w-96 shadow-2xl animate-scale-in">
+                <h3 className="text-lg font-bold text-white mb-4">保存当前配置</h3>
+                <Input
+                  label="配置名称"
+                  value={newConfigName}
+                  onChange={setNewConfigName}
+                  placeholder="例如: DeepSeek API"
+                  className="mb-4"
+                />
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="secondary"
+                    onClick={() => setShowSaveDialog(false)}
+                    size="sm"
+                  >
+                    取消
+                  </Button>
+                  <Button
+                    onClick={handleSaveConfig}
+                    disabled={!newConfigName.trim()}
+                    size="sm"
+                  >
+                    保存
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
 
           <Card
              header={
@@ -150,6 +236,14 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
                   </svg>
                   测试模式
                 </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => resetToDefaults()}
+                  disabled={isRunning}
+                >
+                  恢复默认
+                </Button>
               </div>
             }
           >

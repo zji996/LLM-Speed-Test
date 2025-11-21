@@ -15,9 +15,52 @@ interface SelectOption {
   label: string;
 }
 
+export interface SavedApiConfig {
+  id: string;
+  name: string;
+  apiEndpoint: string;
+  apiKey: string;
+}
+
+const DEFAULT_SAVED_API_CONFIGS: SavedApiConfig[] = [
+  {
+    id: 'openai',
+    name: 'OpenAI 官方 (api.openai.com)',
+    apiEndpoint: 'https://api.openai.com/v1',
+    apiKey: '',
+  },
+  {
+    id: 'deepseek',
+    name: 'DeepSeek API',
+    apiEndpoint: 'https://api.deepseek.com/v1',
+    apiKey: '',
+  },
+];
+
+interface PersistedTestState {
+  config: TestConfiguration;
+  mode: TestMode;
+  concurrencyStepConfig: StepConfiguration;
+  concurrencyStepCount: number;
+  inputStepConfig: StepConfiguration;
+  inputStepCount: number;
+}
+
+interface PersistedAppConfig {
+  testState?: PersistedTestState;
+  savedApiConfigs?: SavedApiConfig[];
+  lastValidApiEndpoint?: string;
+  lastValidApiKey?: string;
+}
+
 export interface UseTestConfigurationResult {
   mode: TestMode;
   setMode: (mode: TestMode) => void;
+
+  savedConfigs: SavedApiConfig[];
+  saveCurrentConfig: (name: string) => void;
+  deleteConfig: (id: string) => void;
+  loadConfig: (id: string) => void;
 
   config: TestConfiguration;
   setConfig: React.Dispatch<React.SetStateAction<TestConfiguration>>;
@@ -50,6 +93,7 @@ export interface UseTestConfigurationResult {
   handleInputChange: (field: keyof TestConfiguration, value: any) => void;
   handleValidateAPI: () => Promise<void>;
   handleStartTest: () => Promise<void>;
+  resetToDefaults: () => Promise<void>;
 }
 
 export const useTestConfiguration = (
@@ -100,22 +144,86 @@ export const useTestConfiguration = (
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [customHeaders, setCustomHeaders] = useState<string>('');
 
-  // Load defaults from backend and localStorage
+  const [savedConfigs, setSavedConfigs] = useState<SavedApiConfig[]>([]);
+
+  // Load saved configs
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('savedApiConfigs');
+      if (saved) {
+        setSavedConfigs(JSON.parse(saved));
+         return;
+      }
+    } catch (e) {
+      console.warn('Failed to load saved API configs', e);
+    }
+
+    // Fallback: provide a couple of helpful defaults on first launch
+    setSavedConfigs(DEFAULT_SAVED_API_CONFIGS);
+  }, []);
+
+  // Save configs to local storage
+  useEffect(() => {
+    try {
+      localStorage.setItem('savedApiConfigs', JSON.stringify(savedConfigs));
+    } catch (e) {
+      console.warn('Failed to persist saved API configs', e);
+    }
+  }, [savedConfigs]);
+
+  const saveCurrentConfig = (name: string) => {
+    const newConfig: SavedApiConfig = {
+      id: Date.now().toString(),
+      name,
+      apiEndpoint: config.apiEndpoint,
+      apiKey: config.apiKey,
+    };
+    setSavedConfigs(prev => [...prev, newConfig]);
+  };
+
+  const deleteConfig = (id: string) => {
+    setSavedConfigs(prev => prev.filter(c => c.id !== id));
+  };
+
+  const loadConfig = (id: string) => {
+    const target = savedConfigs.find(c => c.id === id);
+    if (target) {
+      setConfig(prev => ({
+        ...prev,
+        apiEndpoint: target.apiEndpoint,
+        apiKey: target.apiKey
+      }));
+      localStorage.setItem('apiEndpoint', target.apiEndpoint);
+      localStorage.setItem('apiKey', target.apiKey);
+      // Optionally fetch models immediately if needed
+      // fetchModels(target.apiEndpoint, target.apiKey); 
+    }
+  };
+
+  // Load defaults from backend config file + localStorage
   useEffect(() => {
     const loadDefaults = async () => {
       try {
-        const { GetDefaultTestConfiguration } = await import('../wailsjs/go/main/App');
+        const { GetDefaultTestConfiguration, GetAppConfig } = await import('../wailsjs/go/main/App');
         const defaultConfig = (await GetDefaultTestConfiguration()) as TestConfiguration;
+        const persisted = (await GetAppConfig().catch(() => null)) as PersistedAppConfig | null;
+
         const savedEndpoint = localStorage.getItem('apiEndpoint');
         const savedApiKey = localStorage.getItem('apiKey');
         const savedModel = localStorage.getItem('selectedModel');
         const savedStateRaw = localStorage.getItem('testConfigStateV1');
+        const lastValidEndpoint =
+          (persisted?.lastValidApiEndpoint && persisted.lastValidApiEndpoint.trim()) ||
+          localStorage.getItem('lastValidApiEndpoint');
+        const lastValidApiKey =
+          (persisted?.lastValidApiKey && persisted.lastValidApiKey.trim()) ||
+          localStorage.getItem('lastValidApiKey');
 
         let mergedConfig: TestConfiguration = {
           ...defaultConfig,
-          apiEndpoint: savedEndpoint || defaultConfig.apiEndpoint,
-          apiKey: savedApiKey || defaultConfig.apiKey,
-          model: savedModel || '',
+          apiEndpoint: defaultConfig.apiEndpoint,
+          apiKey: defaultConfig.apiKey,
+          model: '',
           promptType: 'fixed',
           prompt: '',
           testMode: 'normal',
@@ -124,9 +232,24 @@ export const useTestConfiguration = (
 
         let restoredMode: TestMode = 'normal';
 
-        if (savedStateRaw) {
+        // Apply persisted test state from config file first
+        const persistedState = persisted?.testState;
+        if (persistedState) {
+          mergedConfig = {
+            ...mergedConfig,
+            ...persistedState.config,
+          };
+          restoredMode = persistedState.mode;
+          setConcurrencyStepConfig(persistedState.concurrencyStepConfig);
+          setConcurrencyStepCount(persistedState.concurrencyStepCount);
+          setInputStepConfig(persistedState.inputStepConfig);
+          setInputStepCount(persistedState.inputStepCount);
+        }
+
+        // Then merge any legacy localStorage-based state for backward compatibility
+        if (savedStateRaw && !persistedState) {
           try {
-            const savedState = JSON.parse(savedStateRaw);
+            const savedState = JSON.parse(savedStateRaw) as PersistedTestState;
             if (savedState.config) {
               mergedConfig = {
                 ...mergedConfig,
@@ -153,18 +276,34 @@ export const useTestConfiguration = (
           }
         }
 
+        // Select endpoint/key precedence:
+        // 1) last validated values (from file or localStorage)
+        // 2) explicit saved values from localStorage
+        // 3) whatever is in mergedConfig/defaultConfig
+        const effectiveEndpoint =
+          lastValidEndpoint || savedEndpoint || mergedConfig.apiEndpoint || defaultConfig.apiEndpoint;
+        const effectiveApiKey = lastValidApiKey || savedApiKey || mergedConfig.apiKey || defaultConfig.apiKey;
+
         mergedConfig = {
           ...mergedConfig,
+          apiEndpoint: effectiveEndpoint,
+          apiKey: effectiveApiKey,
+          model: savedModel || mergedConfig.model || '',
           promptType: 'fixed',
           prompt: '',
           testMode: 'normal',
         };
 
+        // Load saved API configs from file if present
+        if (persisted?.savedApiConfigs && persisted.savedApiConfigs.length > 0) {
+          setSavedConfigs(persisted.savedApiConfigs);
+        }
+
         setConfig(mergedConfig);
         setMode(restoredMode);
 
-        if (savedApiKey && savedEndpoint) {
-          fetchModels(savedEndpoint, savedApiKey);
+        if (effectiveApiKey && effectiveEndpoint) {
+          fetchModels(effectiveEndpoint, effectiveApiKey);
         }
       } catch (err) {
         console.error('Failed to load defaults:', err);
@@ -174,10 +313,10 @@ export const useTestConfiguration = (
     loadDefaults();
   }, [fetchModels]);
 
-  // Persist configuration and step settings
+  // Persist configuration and step settings to both localStorage and backend config file
   useEffect(() => {
     try {
-      const stateToSave = {
+      const stateToSave: PersistedTestState = {
         config,
         mode,
         concurrencyStepConfig,
@@ -190,6 +329,35 @@ export const useTestConfiguration = (
       console.warn('Failed to persist test configuration state:', err);
     }
   }, [config, mode, concurrencyStepConfig, concurrencyStepCount, inputStepConfig, inputStepCount]);
+
+  // Helper: persist full app config file, called only after
+  // a successful API validation to avoid saving incomplete states.
+  const persistAppConfig = async (lastValidEndpoint?: string, lastValidApiKey?: string) => {
+    try {
+      const { SaveAppConfig } = await import('../wailsjs/go/main/App');
+
+      const stateToSave: PersistedTestState = {
+        config,
+        mode,
+        concurrencyStepConfig,
+        concurrencyStepCount,
+        inputStepConfig,
+        inputStepCount,
+      };
+
+      const appConfig: PersistedAppConfig = {
+        testState: stateToSave,
+        savedApiConfigs: savedConfigs,
+        lastValidApiEndpoint:
+          lastValidEndpoint ?? localStorage.getItem('lastValidApiEndpoint') ?? '',
+        lastValidApiKey: lastValidApiKey ?? localStorage.getItem('lastValidApiKey') ?? '',
+      };
+
+      await SaveAppConfig(appConfig as any);
+    } catch (err) {
+      console.warn('Failed to persist app config file:', err);
+    }
+  };
 
   const handleInputChange = (field: keyof TestConfiguration, value: any) => {
     setConfig(prev => {
@@ -217,6 +385,17 @@ export const useTestConfiguration = (
       const { ValidateAPIKey } = await import('../wailsjs/go/main/App');
       await ValidateAPIKey(config.apiEndpoint, config.apiKey);
       await fetchModels(config.apiEndpoint, config.apiKey);
+      // Persist the last successfully validated endpoint & key
+      // so that a fresh launch can start from a known-good API.
+      try {
+        localStorage.setItem('lastValidApiEndpoint', config.apiEndpoint);
+        localStorage.setItem('lastValidApiKey', config.apiKey);
+        // Also persist the full app config file only after a
+        // successful validation + model fetch.
+        await persistAppConfig(config.apiEndpoint, config.apiKey);
+      } catch (e) {
+        console.warn('Failed to persist last valid API config', e);
+      }
     } catch (err) {
       setValidationError(`API验证失败: ${err}`);
     } finally {
@@ -310,6 +489,39 @@ export const useTestConfiguration = (
     onStartTest(finalConfig);
   };
 
+  const resetToDefaults = async () => {
+    try {
+      const { GetDefaultTestConfiguration } = await import('../wailsjs/go/main/App');
+      const defaultConfig = (await GetDefaultTestConfiguration()) as TestConfiguration;
+
+      const currentEndpoint = config.apiEndpoint;
+      const currentApiKey = config.apiKey;
+
+      const nextConfig: TestConfiguration = {
+        ...defaultConfig,
+        apiEndpoint: currentEndpoint,
+        apiKey: currentApiKey,
+        model: '',
+        promptType: 'fixed',
+        prompt: '',
+        testMode: 'normal',
+        stepConfig: { start: 1, end: 10, step: 1 },
+        headers: {},
+      };
+
+      setConfig(nextConfig);
+      setMode('normal');
+      setConcurrencyStepConfig({ start: 1, end: 10, step: 1 });
+      setConcurrencyStepCount(10);
+      setInputStepConfig({ start: 2048, end: 2048 * 3, step: 2048 });
+      setInputStepCount(3);
+      setCustomHeaders('');
+      setValidationError('');
+    } catch (err) {
+      console.error('Failed to reset configuration to defaults:', err);
+    }
+  };
+
   const modelOptions: SelectOption[] = availableModels.map(model => ({
     value: model.id,
     label: model.name,
@@ -340,6 +552,10 @@ export const useTestConfiguration = (
     setShowAdvanced,
     customHeaders,
     setCustomHeaders,
+    savedConfigs,
+    saveCurrentConfig,
+    deleteConfig,
+    loadConfig,
     availableModels,
     isLoadingModels: isLoading,
     modelError: error,
@@ -348,6 +564,6 @@ export const useTestConfiguration = (
     handleInputChange,
     handleValidateAPI,
     handleStartTest,
+    resetToDefaults,
   };
 };
-

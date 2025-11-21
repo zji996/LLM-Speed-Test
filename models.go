@@ -178,3 +178,33 @@ type ExportOptions struct {
 	ChartTypes    []string `json:"chartTypes,omitempty"`
 	DateFormat    string   `json:"dateFormat,omitempty"`
 }
+
+// SavedAPIConfig represents a saved API endpoint + key pair
+// for quick switching between different providers or accounts.
+type SavedAPIConfig struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	APIEndpoint string `json:"apiEndpoint"`
+	APIKey      string `json:"apiKey"`
+}
+
+// TestUIState captures the current UI-side testing configuration
+// so it can be restored on the next launch.
+type TestUIState struct {
+	Config                TestConfiguration `json:"config"`
+	Mode                  string            `json:"mode"`
+	ConcurrencyStepConfig StepConfiguration `json:"concurrencyStepConfig"`
+	ConcurrencyStepCount  int               `json:"concurrencyStepCount"`
+	InputStepConfig       StepConfiguration `json:"inputStepConfig"`
+	InputStepCount        int               `json:"inputStepCount"`
+}
+
+// AppConfig is the persisted configuration for the desktop app.
+// It mirrors the key configuration options used on the frontend
+// so that state can be restored across restarts.
+type AppConfig struct {
+	TestState           TestUIState      `json:"testState"`
+	SavedAPIConfigs     []SavedAPIConfig `json:"savedApiConfigs"`
+	LastValidAPIEndpoint string          `json:"lastValidApiEndpoint"`
+	LastValidAPIKey      string          `json:"lastValidApiKey"`
+}
