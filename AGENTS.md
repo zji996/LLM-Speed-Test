@@ -18,6 +18,7 @@ This document guides contributors (and automated agents) working on the LLM Spee
 - Go: use idiomatic Go, run `gofmt` on all touched files; exported symbols in `CamelCase`, unexported in `camelCase`.
 - TypeScript/React: follow existing patterns in `frontend/src` (functional components, hooks, 2-space indentation).
 - Keep modules focused (service logic in `*_service.go`, models in `models.go`, HTTP/client code in `openai_client.go`).
+- TypeScript: 禁止随意使用 `any`；如需与第三方库交互，优先使用精确类型或 `unknown` 并通过类型守卫/缩窄来处理。
 
 ## Testing Guidelines
 - Go tests: `go test ./...` at the repo root; add tests alongside code (e.g., `foo_test.go`).

@@ -153,7 +153,7 @@ export interface ComparisonSummary {
 
 export interface ExportOptions {
   includeCharts?: boolean;
-  chartTypes?: string[];
+  chartTypes?: ('latency' | 'throughput' | 'roundThroughput')[];
   dateFormat?: string;
 }
 

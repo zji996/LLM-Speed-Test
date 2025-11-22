@@ -9,6 +9,8 @@ import type {
   ExportOptions,
 } from '../../../types';
 
+export function GetAppVersion():Promise<string>;
+
 export function ValidateAPIKey(arg1:string,arg2:string):Promise<void>;
 export function GetAvailableModels(arg1:string,arg2:string):Promise<Array<string>>;
 export function StartSpeedTest(arg1:TestConfiguration):Promise<TestBatch>;
@@ -21,6 +23,9 @@ export function GetAllTestBatches():Promise<Array<TestBatch>>;
 export function CompareTestBatches(arg1:Array<string>):Promise<ComparisonResult>;
 export function ExportTestData(arg1:string,arg2:string,arg3:ExportOptions):Promise<string>;
 export function GetExportDirectory():Promise<string>;
+export function ChooseExportDirectory():Promise<string>;
+export function SetExportDirectory(arg1:string):Promise<void>;
+export function OpenExportDirectory():Promise<void>;
 export function GetDefaultTestConfiguration():Promise<TestConfiguration>;
 export function GetPromptTypes():Promise<Array<string>>;
 export function GetDefaultPromptLengths():Promise<Array<number>>;

@@ -33,9 +33,9 @@ const Select: React.FC<SelectProps> = ({
   };
 
   return (
-    <div className={`space-y-2 ${className}`}>
+    <div className={`space-y-1.5 ${className}`}>
       {label && (
-        <label className="block text-sm font-medium text-gray-300">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
           {label}
           {required && <span className="text-[var(--color-accent)] ml-1">*</span>}
         </label>
@@ -46,22 +46,25 @@ const Select: React.FC<SelectProps> = ({
           onChange={handleChange}
           disabled={disabled}
           className={`
-            w-full px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white appearance-none
-            transition-all duration-200
-            focus:outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] focus:shadow-[0_0_15px_rgba(6,182,212,0.3)]
-            disabled:opacity-50 disabled:cursor-not-allowed
+            w-full px-4 py-2.5 rounded-lg 
+            bg-white border border-gray-300 text-gray-900
+            dark:bg-gray-800 dark:border-gray-700 dark:text-white
+            appearance-none
+            transition-all duration-200 shadow-sm
+            focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)] focus:ring-opacity-20
+            disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50 dark:disabled:bg-gray-900
             ${error ? 'border-[var(--color-error)]' : ''}
-            ${value === '' ? 'text-gray-500' : ''}
+            ${value === '' ? 'text-gray-400 dark:text-gray-500' : ''}
           `}
         >
-          <option value="" className="bg-gray-900 text-gray-500">{placeholder}</option>
+          <option value="" className="text-gray-500 dark:text-gray-400">{placeholder}</option>
           {options.map((option) => (
-            <option key={option.value} value={option.value} className="bg-gray-900 text-white">
+            <option key={option.value} value={option.value} className="text-gray-900 dark:text-white">
               {option.label}
             </option>
           ))}
         </select>
-        <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-400">
+        <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-400 dark:text-gray-500">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>

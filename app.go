@@ -6,9 +6,13 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-const maxStoredBatches = 50
+const (
+	maxStoredBatches = 50
+	appVersion       = "v0.3"
+)
 
 // App struct
 type App struct {
@@ -35,6 +39,11 @@ func NewApp() *App {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+}
+
+// GetAppVersion returns the current application version.
+func (a *App) GetAppVersion() string {
+	return appVersion
 }
 
 // ValidateAPIKey validates an API key for the given endpoint
@@ -232,6 +241,60 @@ func (a *App) ExportTestData(batchID string, format string, options ExportOption
 // GetExportDirectory returns the export directory path
 func (a *App) GetExportDirectory() string {
 	return a.exportService.GetExportDirectory()
+}
+
+// ChooseExportDirectory shows a system directory picker and updates the export directory.
+// Returns the newly selected directory path. If the user cancels, an empty string is returned.
+func (a *App) ChooseExportDirectory() (string, error) {
+	if a.ctx == nil {
+		return "", fmt.Errorf("application context not initialised")
+	}
+
+	currentDir := a.exportService.GetExportDirectory()
+	selected, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title:            "选择导出目录",
+		DefaultDirectory: currentDir,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	// User cancelled the dialog
+	if selected == "" {
+		return "", nil
+	}
+
+	a.exportService = NewExportService(selected)
+	return selected, nil
+}
+
+// SetExportDirectory updates the export directory used by the export service.
+// The directory will be created if it does not exist.
+func (a *App) SetExportDirectory(path string) error {
+	if path == "" {
+		return fmt.Errorf("export directory path cannot be empty")
+	}
+
+	// Normalise and ensure directory exists by reinitialising the service.
+	a.exportService = NewExportService(path)
+	return nil
+}
+
+// OpenExportDirectory opens the current export directory in the system file explorer.
+func (a *App) OpenExportDirectory() error {
+	exportDir := a.exportService.GetExportDirectory()
+	if exportDir == "" {
+		return fmt.Errorf("export directory is not configured")
+	}
+
+	if a.ctx == nil {
+		return fmt.Errorf("application context not initialised")
+	}
+
+	// Use the Wails runtime helper so that the correct file manager is used
+	// on each platform. The `file://` prefix is understood by the runtime.
+	runtime.BrowserOpenURL(a.ctx, "file://"+exportDir)
+	return nil
 }
 
 // GetDefaultTestConfiguration returns a default test configuration

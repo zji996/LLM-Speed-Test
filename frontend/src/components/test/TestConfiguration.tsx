@@ -58,8 +58,8 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-fade-in pb-20">
       <div className="text-center space-y-2">
-        <h1 className="text-4xl font-bold tracking-tight text-white neon-text">LLM 性能极限测试</h1>
-        <p className="text-gray-400">配置参数，探索大模型的推理速度边界</p>
+        <h1 className="text-4xl font-bold tracking-tight text-gray-900 dark:text-white">LLM 性能极限测试</h1>
+        <p className="text-gray-500 dark:text-gray-400">配置参数，探索大模型的推理速度边界</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -155,9 +155,9 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
 
           {/* Save Config Dialog */}
           {showSaveDialog && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
-              <div className="bg-gray-900 p-6 rounded-xl border border-white/10 w-96 shadow-2xl animate-scale-in">
-                <h3 className="text-lg font-bold text-white mb-4">保存当前配置</h3>
+            <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 backdrop-blur-sm">
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 w-96 shadow-2xl animate-scale-in">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">保存当前配置</h3>
                 <Input
                   label="配置名称"
                   value={newConfigName}
@@ -251,19 +251,19 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
                <div className="grid grid-cols-3 gap-2">
                    <button
                      onClick={() => setMode('normal')}
-                     className={`px-3 py-2 text-sm rounded-md transition-all border ${mode === 'normal' ? 'bg-[var(--color-primary)] border-[var(--color-primary)] text-white shadow-lg' : 'border-white/10 text-gray-400 hover:text-white hover:border-white/30'}`}
+                     className={`px-3 py-2 text-sm font-medium rounded-lg transition-all border ${mode === 'normal' ? 'bg-[var(--color-primary)] border-transparent text-white shadow-md' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-300 dark:hover:border-gray-600'}`}
                    >
                      普通测试
                    </button>
                    <button
                      onClick={() => setMode('concurrency_step')}
-                     className={`px-3 py-2 text-sm rounded-md transition-all border ${mode === 'concurrency_step' ? 'bg-[var(--color-accent)] border-[var(--color-accent)] text-white shadow-lg' : 'border-white/10 text-gray-400 hover:text-white hover:border-white/30'}`}
+                     className={`px-3 py-2 text-sm font-medium rounded-lg transition-all border ${mode === 'concurrency_step' ? 'bg-[var(--color-primary)] border-transparent text-white shadow-md' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-300 dark:hover:border-gray-600'}`}
                    >
                      并发步进测试
                    </button>
                    <button
                      onClick={() => setMode('input_step')}
-                     className={`px-3 py-2 text-sm rounded-md transition-all border ${mode === 'input_step' ? 'bg-[var(--color-accent)] border-[var(--color-accent)] text-white shadow-lg' : 'border-white/10 text-gray-400 hover:text-white hover:border-white/30'}`}
+                     className={`px-3 py-2 text-sm font-medium rounded-lg transition-all border ${mode === 'input_step' ? 'bg-[var(--color-primary)] border-transparent text-white shadow-md' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-300 dark:hover:border-gray-600'}`}
                    >
                      输入长度步进
                    </button>
@@ -286,7 +286,7 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
                         <button
                           key={num}
                           onClick={() => handleInputChange('concurrentTests', num)}
-                          className={`px-2 py-1 text-xs rounded border border-white/10 hover:border-[var(--color-primary)] transition-colors ${config.concurrentTests === num ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]' : 'text-gray-400'}`}
+                          className={`px-3 py-1 text-xs font-medium rounded-md border transition-colors ${config.concurrentTests === num ? 'bg-[var(--color-primary)] text-white border-transparent' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
                         >
                           {num}
                         </button>
@@ -296,8 +296,8 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
                )}
 
                {mode === 'concurrency_step' && (
-                 <div className="space-y-4 animate-fade-in bg-white/5 rounded-lg p-4 border border-white/10">
-                   <h3 className="text-sm font-semibold text-gray-200 mb-2">
+                 <div className="space-y-4 animate-fade-in bg-gray-50 dark:bg-gray-800/50 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
+                   <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                      并发数范围设置
                    </h3>
                    <div className="grid grid-cols-3 gap-3">
@@ -348,15 +348,15 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
                        }}
                      />
                    </div>
-                   <div className="text-xs text-gray-400 mt-1">
+                   <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                      预计结束值 (End): {concurrencyStepConfig.end}
                    </div>
                  </div>
                )}
 
                {mode === 'input_step' && (
-                 <div className="space-y-4 animate-fade-in bg-white/5 rounded-lg p-4 border border-white/10">
-                   <h3 className="text-sm font-semibold text-gray-200 mb-2">
+                 <div className="space-y-4 animate-fade-in bg-gray-50 dark:bg-gray-800/50 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
+                   <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                      输入长度范围设置 (Tokens)
                    </h3>
                    <div className="grid grid-cols-3 gap-3">
@@ -407,7 +407,7 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
                        }}
                      />
                    </div>
-                   <div className="text-xs text-gray-400 mt-1">
+                   <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                      预计结束值 (End): {inputStepConfig.end}
                    </div>
                    <div className="pt-2">
@@ -428,7 +428,7 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
                  <button
                     type="button"
                     onClick={() => setShowAdvanced(!showAdvanced)}
-                    className="flex items-center text-sm text-gray-400 hover:text-white transition-colors"
+                    className="flex items-center text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
                  >
                     <svg className={`w-4 h-4 mr-2 transform transition-transform ${showAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -437,7 +437,7 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
                  </button>
                  
                  {showAdvanced && (
-                   <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 animate-slide-up p-4 bg-black/20 rounded-lg">
+                   <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 animate-slide-up p-5 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
                       <Input
                         label="测试轮次 (Rounds per step)"
                         type="number"
@@ -459,7 +459,7 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
           </Card>
 
           {validationError && (
-            <div className="p-4 rounded-lg bg-[var(--color-error)]/10 border border-[var(--color-error)]/30 text-[var(--color-error)] flex items-center animate-bounce">
+            <div className="p-4 rounded-lg bg-red-50 border border-red-100 text-red-600 flex items-center animate-bounce">
                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                {validationError}
             </div>
@@ -470,7 +470,7 @@ const TestConfigurationComponent: React.FC<TestConfigurationProps> = ({ onStartT
              disabled={isRunning}
              loading={isRunning}
              size="lg"
-             className="w-full text-lg font-bold tracking-wide uppercase py-4"
+             className="w-full text-lg font-bold tracking-wide py-4 shadow-lg shadow-blue-500/30 hover:shadow-blue-500/40 transition-shadow"
           >
              {isRunning ? '测试运行中...' : '启动性能测试'}
           </Button>

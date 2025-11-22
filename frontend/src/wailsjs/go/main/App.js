@@ -2,6 +2,14 @@
 // Wails bindings for main.App
 
 /**
+ * Get application version
+ * @returns {Promise<string>} - App version string
+ */
+export function GetAppVersion() {
+  return window.go.main.App.GetAppVersion();
+}
+
+/**
  * Validate an API key for the given endpoint
  * @param {string} endpoint - API endpoint
  * @param {string} apiKey - API key
@@ -106,6 +114,31 @@ export function ExportTestData(batchId, format, options) {
  */
 export function GetExportDirectory() {
   return window.go.main.App.GetExportDirectory();
+}
+
+/**
+ * Choose export directory via system dialog
+ * @returns {Promise<string>} - Selected export directory path (empty if cancelled)
+ */
+export function ChooseExportDirectory() {
+  return window.go.main.App.ChooseExportDirectory();
+}
+
+/**
+ * Set export directory
+ * @param {string} path - Export directory path
+ * @returns {Promise<void>}
+ */
+export function SetExportDirectory(path) {
+  return window.go.main.App.SetExportDirectory(path);
+}
+
+/**
+ * Open export directory in system file explorer
+ * @returns {Promise<void>}
+ */
+export function OpenExportDirectory() {
+  return window.go.main.App.OpenExportDirectory();
 }
 
 /**

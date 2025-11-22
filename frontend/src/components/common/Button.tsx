@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 
 export interface ButtonProps {
   variant?: 'primary' | 'secondary' | 'success' | 'warning' | 'error' | 'ghost';
@@ -21,15 +22,15 @@ const Button: React.FC<ButtonProps> = ({
   className = '',
   type = 'button'
 }) => {
-  const baseClasses = 'inline-flex items-center justify-center rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-transparent disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]';
+  const baseClasses = 'inline-flex items-center justify-center rounded-lg font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--color-primary)] disabled:opacity-50 disabled:cursor-not-allowed';
 
   const variantClasses = {
-    primary: 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-hover)] text-white shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:shadow-[0_0_25px_rgba(6,182,212,0.6)] border border-transparent',
-    secondary: 'bg-white/5 text-white border border-white/10 hover:bg-white/10 hover:border-white/20 backdrop-blur-sm',
-    success: 'bg-[var(--color-success)] text-white shadow-lg shadow-green-500/30 hover:bg-green-600',
-    warning: 'bg-[var(--color-warning)] text-white shadow-lg shadow-yellow-500/30 hover:bg-yellow-600',
-    error: 'bg-[var(--color-error)] text-white shadow-lg shadow-red-500/30 hover:bg-red-600',
-    ghost: 'bg-transparent text-gray-300 hover:text-white hover:bg-white/5'
+    primary: 'bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)] shadow-sm',
+    secondary: 'bg-gray-200 text-gray-900 hover:bg-gray-300 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600',
+    success: 'bg-[var(--color-success)] text-white hover:brightness-110 shadow-sm',
+    warning: 'bg-[var(--color-warning)] text-white hover:brightness-110 shadow-sm',
+    error: 'bg-[var(--color-error)] text-white hover:brightness-110 shadow-sm',
+    ghost: 'bg-transparent text-[var(--color-primary)] hover:bg-gray-100 dark:hover:bg-gray-800'
   };
 
   const sizeClasses = {
@@ -41,11 +42,13 @@ const Button: React.FC<ButtonProps> = ({
   const classes = `${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`;
 
   return (
-    <button
+    <motion.button
       type={type}
       className={classes}
       disabled={disabled || loading}
       onClick={onClick}
+      whileTap={{ scale: 0.96 }}
+      transition={{ duration: 0.1 }}
     >
       {loading && (
         <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-current" fill="none" viewBox="0 0 24 24">
@@ -54,7 +57,7 @@ const Button: React.FC<ButtonProps> = ({
         </svg>
       )}
       {children}
-    </button>
+    </motion.button>
   );
 };
 

@@ -718,75 +718,109 @@ textarea {
   }
 }
 
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  body {
-    background-color: #1a1a1a;
-    color: #e0e0e0;
-  }
+/* Dark mode support - using .dark class from Tailwind/useTheme */
+.dark body {
+  background-color: #1a1a1a;
+  color: #e0e0e0;
+}
 
-  .app-header {
-    background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
-  }
+.dark .app-header {
+  background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+}
 
-  .sidebar {
-    background: #2d3748;
-    border-right-color: #4a5568;
-  }
+.dark .sidebar {
+  background: #2d3748;
+  border-right-color: #4a5568;
+}
 
-  .main-content {
-    background: #1a1a1a;
-  }
+.dark .main-content {
+  background: #1a1a1a;
+}
 
-  .config-section,
-  .summary-section,
-  .performance-section,
-  .test-details-section,
-  .export-section,
-  .individual-results-section,
-  .chart-section {
-    background: #2d3748;
-    border-color: #4a5568;
-  }
+.dark .config-section,
+.dark .summary-section,
+.dark .performance-section,
+.dark .test-details-section,
+.dark .export-section,
+.dark .individual-results-section,
+.dark .chart-section {
+  background: #2d3748;
+  border-color: #4a5568;
+}
 
-  input, select, textarea {
-    background: #1a1a1a;
-    border-color: #4a5568;
-    color: #e0e0e0;
-  }
+.dark input, 
+.dark select, 
+.dark textarea {
+  background: #1a1a1a;
+  border-color: #4a5568;
+  color: #e0e0e0;
+}
 
-  input:focus, select:focus, textarea:focus {
-    border-color: #667eea;
-  }
+.dark input:focus, 
+.dark select:focus, 
+.dark textarea:focus {
+  border-color: #667eea;
+}
 
-  .history-item {
-    background: #2d3748;
-    border-color: #4a5568;
-  }
+.dark .history-item {
+  background: #2d3748;
+  border-color: #4a5568;
+}
 
-  .history-item:hover {
-    background: #4a5568;
-  }
+.dark .history-item:hover {
+  background: #4a5568;
+}
 
-  .history-item.active {
-    background: #667eea;
-  }
+.dark .history-item.active {
+  background: #667eea;
+}
 
-  .summary-item,
-  .metric-card,
-  .test-info-item,
-  .chart-stats,
-  .chart-summary,
-  .results-table table {
-    background: #1a1a1a;
-    border-color: #4a5568;
-  }
+.dark .summary-item,
+.dark .metric-card,
+.dark .test-info-item,
+.dark .chart-stats,
+.dark .chart-summary,
+.dark .results-table table {
+  background: #1a1a1a;
+  border-color: #4a5568;
+}
 
-  .results-table th {
-    background: #2d3748;
-  }
+.dark .results-table th {
+  background: #2d3748;
+}
 
-  .results-table tr:hover {
-    background: #2d3748;
-  }
+.dark .results-table tr:hover {
+  background: #2d3748;
+}
+
+/* Ensure text colors are readable in dark mode */
+.dark h1, .dark h2, .dark h3, .dark h4, .dark h5, .dark h6 {
+  color: #e0e0e0;
+}
+
+.dark .tab-button {
+  background: #2d3748;
+  color: #aaa;
+}
+
+.dark .tab-button:hover:not(:disabled) {
+  background: #4a5568;
+  color: #fff;
+}
+
+.dark .tab-button.active {
+  background: #667eea;
+  color: white;
+}
+
+.dark .metric-label,
+.dark .summary-label,
+.dark .stat-label {
+  color: #a0aec0;
+}
+
+.dark .metric-value,
+.dark .summary-value,
+.dark .stat-value {
+  color: #e0e0e0;
 }

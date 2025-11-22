@@ -29,7 +29,7 @@ export interface SpeedTestControllerState {
   hasQueuedTests: boolean;
   currentRunType: RunType;
   handleStartTest: (config: TestConfigType | TestConfigType[]) => Promise<void>;
-  handleExport: (format: 'csv' | 'json' | 'png', options?: ExportOptions) => Promise<void>;
+  handleExport: (format: 'csv' | 'json' | 'png', options?: ExportOptions) => Promise<string>;
 }
 
 export const useSpeedTestController = (): SpeedTestControllerState => {
@@ -158,7 +158,7 @@ export const useSpeedTestController = (): SpeedTestControllerState => {
                     // All tests completed
                     setIsAutoTesting(false);
                     setAutoTestTotal(0);
-                    setActiveTab('results');
+                    setActiveTab('charts');
                   }
                 }
               } catch (error) {
@@ -214,14 +214,9 @@ export const useSpeedTestController = (): SpeedTestControllerState => {
     }
   };
 
-  const handleExport = async (format: 'csv' | 'json' | 'png', options?: ExportOptions) => {
-    if (!currentBatch) return;
-    try {
-      const filePath = await ExportTestData(currentBatch.id, format, options || {});
-      alert(`导出成功: ${filePath}`);
-    } catch (error) {
-      alert(`导出失败: ${error}`);
-    }
+  const handleExport = async (format: 'csv' | 'json' | 'png', options?: ExportOptions): Promise<string> => {
+    if (!currentBatch) throw new Error("No current batch to export");
+    return await ExportTestData(currentBatch.id, format, options || {});
   };
 
   return {

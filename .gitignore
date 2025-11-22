@@ -61,3 +61,6 @@ frontend/wailsjs/go/
 .Trashes
 ehthumbs.db
 [Tt]humbs.db
+
+# Exported files directory
+exports/

@@ -2,7 +2,6 @@ import React from 'react';
 import { TestResult, TelemetryUpdate } from '../../types';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import Card from '../common/Card';
-import { MAX_LIVE_CHART_POINTS } from '../../utils/constants';
 import RealTimeMonitor from './RealTimeMonitor';
 import { useLiveTestMetrics } from '../../hooks/useLiveTestMetrics';
 
@@ -36,109 +35,158 @@ const LiveTestDashboard: React.FC<LiveTestDashboardProps> = ({
       )}
 
       {!telemetry && (
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* TPS Gauge - Only show if no telemetry, otherwise RealTimeMonitor handles it */}
-        <Card className="relative overflow-hidden">
-          <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-[var(--color-primary)] opacity-20 blur-3xl rounded-full animate-pulse"></div>
-          <div className="relative z-10 text-center py-4">
-             <div className="text-gray-400 text-sm uppercase tracking-widest mb-2">实时速率 (TPS)</div>
-             <div className="text-5xl font-black text-white neon-text tracking-tighter">
-               {currentTPS.toFixed(1)}
-             </div>
-             <div className="text-[var(--color-primary)] text-xs mt-2 font-mono">TOKENS / SEC</div>
-          </div>
-        </Card>
-
-        {/* Progress - Only show if no telemetry */}
-        <Card className="relative overflow-hidden">
-          <div className="absolute top-0 left-0 -mt-4 -ml-4 w-24 h-24 bg-[var(--color-secondary)] opacity-20 blur-3xl rounded-full"></div>
-          <div className="relative z-10 flex flex-col items-center justify-center h-full py-2">
-             <div className="w-full flex justify-between text-sm mb-2">
-               <span className="text-gray-400">测试进度</span>
-               <span className="text-white font-mono">{completedCount} / {totalTests}</span>
-             </div>
-             <div className="w-full bg-white/10 rounded-full h-3 overflow-hidden">
-               <div 
-                 className="h-full bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] relative"
-                 style={{ width: `${(completedCount / Math.max(totalTests, 1)) * 100}%`, transition: 'width 0.5s ease-out' }}
-               >
-                 <div className="absolute inset-0 bg-white/20 animate-[shimmer_2s_infinite]"></div>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {/* TPS Card */}
+        <Card className="md:col-span-2 relative overflow-hidden group">
+          <div className="relative z-10 flex flex-col justify-between h-full">
+             <div className="flex items-center justify-between mb-2">
+               <div className="text-[var(--color-text-secondary)] text-sm font-medium uppercase tracking-wide flex items-center gap-2">
+                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                 </svg>
+                 实时速率 (TPS)
                </div>
+               <span className="text-[var(--color-primary)] text-xs font-mono bg-[var(--color-primary-light)] px-2 py-0.5 rounded-full">TOKENS / SEC</span>
              </div>
-             <div className="w-full flex justify-between text-xs mt-2 text-gray-500">
-               <span>{isRunning ? 'Running...' : 'Idle'}</span>
-               <span>{((completedCount / Math.max(totalTests, 1)) * 100).toFixed(0)}%</span>
+             <div className="flex items-baseline gap-2">
+               <span className="text-5xl font-bold text-[var(--color-text-primary)] tracking-tight">
+                 {currentTPS.toFixed(1)}
+               </span>
              </div>
           </div>
+          <div className="absolute right-0 bottom-0 w-32 h-32 bg-[var(--color-primary)] opacity-5 blur-[60px] group-hover:opacity-10 transition-opacity duration-500"></div>
         </Card>
 
-        {/* Latency/Success */}
-        <Card className="grid grid-cols-2 divide-x divide-white/10">
-           <div className="flex flex-col items-center justify-center p-2">
-              <div className="text-gray-400 text-xs uppercase">平均延迟</div>
-              <div className="text-2xl font-bold text-white mt-1">{averageLatency.toFixed(0)}<span className="text-xs text-gray-500 ml-1">ms</span></div>
-           </div>
-           <div className="flex flex-col items-center justify-center p-2">
-              <div className="text-gray-400 text-xs uppercase">成功率</div>
-              <div className={`text-2xl font-bold mt-1 ${successRate < 95 ? 'text-[var(--color-error)]' : 'text-[var(--color-success)]'}`}>
-                {successRate.toFixed(0)}<span className="text-xs text-gray-500 ml-1">%</span>
+        {/* Latency Card */}
+        <Card className="relative overflow-hidden group">
+           <div className="relative z-10 flex flex-col justify-between h-full">
+              <div className="text-[var(--color-text-secondary)] text-sm font-medium uppercase tracking-wide flex items-center gap-2 mb-2">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                平均延迟
+              </div>
+              <div className="flex items-baseline">
+                <span className="text-3xl font-bold text-[var(--color-text-primary)]">
+                  {averageLatency.toFixed(0)}
+                </span>
+                <span className="text-sm text-[var(--color-text-secondary)] ml-1">ms</span>
               </div>
            </div>
+           <div className="absolute right-0 bottom-0 w-24 h-24 bg-[var(--color-secondary)] opacity-5 blur-[40px] group-hover:opacity-10 transition-opacity duration-500"></div>
+        </Card>
+
+        {/* Success Rate Card */}
+        <Card className="relative overflow-hidden group">
+           <div className="relative z-10 flex flex-col justify-between h-full">
+              <div className="text-[var(--color-text-secondary)] text-sm font-medium uppercase tracking-wide flex items-center gap-2 mb-2">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                成功率
+              </div>
+              <div className="flex items-baseline">
+                <span className={`text-3xl font-bold ${successRate < 95 ? 'text-[var(--color-error)]' : 'text-[var(--color-success)]'}`}>
+                  {successRate.toFixed(0)}
+                </span>
+                <span className="text-sm text-[var(--color-text-secondary)] ml-1">%</span>
+              </div>
+           </div>
+           <div className="absolute right-0 bottom-0 w-24 h-24 bg-[var(--color-success)] opacity-5 blur-[40px] group-hover:opacity-10 transition-opacity duration-500"></div>
         </Card>
       </div>
       )}
 
-      {/* Legacy Real-time Chart based on Results (still useful for individual request analysis) */}
-      <Card className="h-80 p-0 overflow-hidden flex flex-col">
-        <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center bg-white/5">
-          <h3 className="text-white font-semibold flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-[var(--color-primary)] animate-pulse"></span>
+      {/* Progress Bar */}
+      {!telemetry && (
+        <Card noPadding className="p-4">
+           <div className="flex flex-col justify-center">
+             <div className="flex justify-between items-end mb-2">
+               <div>
+                 <span className="text-[var(--color-text-secondary)] text-xs uppercase font-semibold tracking-wider block mb-1">Total Progress</span>
+                 <span className="text-[var(--color-text-primary)] text-lg font-bold">
+                   {completedCount} <span className="text-[var(--color-text-tertiary)] font-normal text-base">/ {totalTests}</span>
+                 </span>
+               </div>
+               <div className="text-right">
+                 <span className="text-[var(--color-primary)] font-bold text-lg">{((completedCount / Math.max(totalTests, 1)) * 100).toFixed(0)}%</span>
+               </div>
+             </div>
+             <div className="w-full bg-[var(--color-border)] rounded-full h-2.5 overflow-hidden">
+               <div 
+                 className="h-full bg-[var(--color-primary)] relative shadow-[0_0_10px_rgba(0,122,255,0.3)]"
+                 style={{ width: `${(completedCount / Math.max(totalTests, 1)) * 100}%`, transition: 'width 0.5s cubic-bezier(0.4, 0, 0.2, 1)' }}
+               >
+               </div>
+             </div>
+           </div>
+        </Card>
+      )}
+
+      {/* Real-time Chart */}
+      <Card noPadding className="h-96 flex flex-col overflow-hidden">
+        <div className="px-6 py-4 border-b border-[var(--color-border)] flex justify-between items-center bg-[var(--color-surface)]/50 backdrop-blur-sm">
+          <h3 className="text-[var(--color-text-primary)] font-semibold flex items-center gap-2">
+            <span className="relative flex h-2.5 w-2.5 mr-1">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+            </span>
             实时性能监控
           </h3>
-          <div className="flex gap-4 text-xs">
-             <span className="flex items-center text-[var(--color-primary)]"><span className="w-3 h-1 bg-[var(--color-primary)] mr-1"></span> TPS</span>
-             <span className="flex items-center text-[var(--color-secondary)]"><span className="w-3 h-1 bg-[var(--color-secondary)] mr-1"></span> Latency</span>
+          <div className="flex gap-4 text-xs font-medium">
+             <span className="flex items-center text-[var(--color-primary)]"><span className="w-2 h-2 rounded-full bg-[var(--color-primary)] mr-2"></span> TPS</span>
+             <span className="flex items-center text-[var(--color-secondary)]"><span className="w-2 h-2 rounded-full bg-[var(--color-secondary)] mr-2"></span> Latency</span>
           </div>
         </div>
-        <div className="flex-1 w-full min-h-0 p-4">
+        <div className="flex-1 w-full min-h-0 p-4 bg-[var(--color-surface)]">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData}>
+            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="colorTps" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.3}/>
+                  <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.2}/>
                   <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0}/>
                 </linearGradient>
                 <linearGradient id="colorLatency" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="var(--color-secondary)" stopOpacity={0.3}/>
+                  <stop offset="5%" stopColor="var(--color-secondary)" stopOpacity={0.2}/>
                   <stop offset="95%" stopColor="var(--color-secondary)" stopOpacity={0}/>
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
               <XAxis 
                 dataKey="id" 
-                stroke="rgba(255,255,255,0.3)" 
-                tick={{fill: 'rgba(255,255,255,0.3)', fontSize: 10}} 
+                stroke="var(--color-text-tertiary)" 
+                tick={{fill: 'var(--color-text-tertiary)', fontSize: 10}} 
                 tickLine={false}
                 axisLine={false}
+                hide
               />
               <YAxis 
                 yAxisId="left" 
-                stroke="rgba(255,255,255,0.3)" 
-                tick={{fill: 'rgba(255,255,255,0.3)', fontSize: 10}}
+                stroke="var(--color-text-tertiary)" 
+                tick={{fill: 'var(--color-text-tertiary)', fontSize: 11}}
                 tickLine={false}
                 axisLine={false}
+                tickFormatter={(value) => value.toFixed(0)}
               />
               <YAxis 
                 yAxisId="right" 
                 orientation="right" 
-                stroke="rgba(255,255,255,0.3)" 
-                tick={{fill: 'rgba(255,255,255,0.3)', fontSize: 10}}
+                stroke="var(--color-text-tertiary)" 
+                tick={{fill: 'var(--color-text-tertiary)', fontSize: 11}}
                 tickLine={false}
                 axisLine={false}
+                tickFormatter={(value) => `${value}ms`}
               />
               <Tooltip 
-                contentStyle={{ backgroundColor: 'rgba(17, 24, 39, 0.9)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
-                itemStyle={{ color: '#fff' }}
+                contentStyle={{ 
+                  backgroundColor: 'var(--color-surface)', 
+                  borderColor: 'var(--color-border)', 
+                  borderRadius: '12px',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                  color: 'var(--color-text-primary)'
+                }}
+                itemStyle={{ color: 'var(--color-text-primary)' }}
+                labelStyle={{ color: 'var(--color-text-secondary)' }}
               />
               <Area 
                 yAxisId="left"
