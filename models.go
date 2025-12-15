@@ -2,26 +2,26 @@ package main
 
 // TestConfiguration represents the configuration for a speed test
 type TestConfiguration struct {
-	APIEndpoint      string            `json:"apiEndpoint"`
-	APIKey           string            `json:"apiKey"`
-	Model            string            `json:"model"`
-	PromptType       string            `json:"promptType"`   // "fixed" or "custom"
-	PromptLength     int               `json:"promptLength"` // Length of prompt in tokens
-	Prompt           string            `json:"prompt"`       // Custom prompt (if PromptType is "custom")
-	MaxTokens        int               `json:"maxTokens"`
-	Temperature      float32           `json:"temperature"`
-	TopP             float32           `json:"topP"`
-	PresencePenalty  float32           `json:"presencePenalty"`
-	FrequencyPenalty float32           `json:"frequencyPenalty"`
-	
+	APIEndpoint      string  `json:"apiEndpoint"`
+	APIKey           string  `json:"apiKey"`
+	Model            string  `json:"model"`
+	PromptType       string  `json:"promptType"`   // "fixed" or "custom"
+	PromptLength     int     `json:"promptLength"` // Length of prompt in tokens
+	Prompt           string  `json:"prompt"`       // Custom prompt (if PromptType is "custom")
+	MaxTokens        int     `json:"maxTokens"`
+	Temperature      float32 `json:"temperature"`
+	TopP             float32 `json:"topP"`
+	PresencePenalty  float32 `json:"presencePenalty"`
+	FrequencyPenalty float32 `json:"frequencyPenalty"`
+
 	// Test Mode Configuration
 	TestMode   string            `json:"testMode"`   // "normal", "concurrency_step", "input_step"
 	StepConfig StepConfiguration `json:"stepConfig"` // Configuration for step tests
 
-	TestCount        int               `json:"testCount"`       // Number of submission rounds (per step)
-	ConcurrentTests  int               `json:"concurrentTests"` // Requests per round (base or fixed)
-	Timeout          int               `json:"timeout"`         // in seconds
-	Headers          map[string]string `json:"headers,omitempty"`
+	TestCount       int               `json:"testCount"`       // Number of submission rounds (per step)
+	ConcurrentTests int               `json:"concurrentTests"` // Requests per round (base or fixed)
+	Timeout         int               `json:"timeout"`         // in seconds
+	Headers         map[string]string `json:"headers,omitempty"`
 }
 
 // StepConfiguration defines parameters for step-based tests
@@ -125,16 +125,16 @@ type ProgressUpdate struct {
 
 // TelemetryUpdate represents real-time telemetry data during test execution
 type TelemetryUpdate struct {
-	Timestamp            int64   `json:"timestamp"`            // Unix timestamp in ms
-	ActiveTests          int     `json:"activeTests"`          // Current number of active requests
-	CompletedTests       int     `json:"completedTests"`       // Number of completed requests
-	TotalTests           int     `json:"totalTests"`           // Total expected requests
-	GeneratedTokens      int64   `json:"generatedTokens"`      // Total tokens generated so far
-	InstantTPS           float64 `json:"instantTPS"`           // Instantaneous tokens per second
-	AverageTTFT          float64 `json:"averageTTFT"`          // Average Time To First Token (ms)
-	P95TTFT              float64 `json:"p95TTFT"`              // 95th percentile TTFT (ms)
-	StepCurrent          int     `json:"stepCurrent"`          // Current step index (for step tests)
-	StepTotal            int     `json:"stepTotal"`            // Total steps (for step tests)
+	Timestamp       int64   `json:"timestamp"`       // Unix timestamp in ms
+	ActiveTests     int     `json:"activeTests"`     // Current number of active requests
+	CompletedTests  int     `json:"completedTests"`  // Number of completed requests
+	TotalTests      int     `json:"totalTests"`      // Total expected requests
+	GeneratedTokens int64   `json:"generatedTokens"` // Total tokens generated so far
+	InstantTPS      float64 `json:"instantTPS"`      // Instantaneous tokens per second
+	AverageTTFT     float64 `json:"averageTTFT"`     // Average Time To First Token (ms)
+	P95TTFT         float64 `json:"p95TTFT"`         // 95th percentile TTFT (ms)
+	StepCurrent     int     `json:"stepCurrent"`     // Current step index (for step tests)
+	StepTotal       int     `json:"stepTotal"`       // Total steps (for step tests)
 }
 
 // ComparisonRequest represents a request to compare multiple test batches
@@ -203,8 +203,8 @@ type TestUIState struct {
 // It mirrors the key configuration options used on the frontend
 // so that state can be restored across restarts.
 type AppConfig struct {
-	TestState           TestUIState      `json:"testState"`
-	SavedAPIConfigs     []SavedAPIConfig `json:"savedApiConfigs"`
-	LastValidAPIEndpoint string          `json:"lastValidApiEndpoint"`
-	LastValidAPIKey      string          `json:"lastValidApiKey"`
+	TestState            TestUIState      `json:"testState"`
+	SavedAPIConfigs      []SavedAPIConfig `json:"savedApiConfigs"`
+	LastValidAPIEndpoint string           `json:"lastValidApiEndpoint"`
+	LastValidAPIKey      string           `json:"lastValidApiKey"`
 }

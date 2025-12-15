@@ -16,6 +16,7 @@ A cross-platform desktop application for testing and comparing the performance o
 - **Detailed Metrics**: Average, minimum, maximum values for all performance indicators, plus per-round totals
 - **Per-Round Insights**: The results dashboard now groups results by round, showing success rates, token counts, latencies, and aggregate round throughput instead of per-request tokens/s
 - **Test Comparison**: Compare performance across different models or configurations
+- **Step Testing Support**: Run concurrency-step and input-length-step experiments with per-step throughput and TTFT analysis
 - **Individual Test Results**: Detailed breakdown of each test execution
 
 ### Export Capabilities
@@ -78,11 +79,12 @@ wails dev
 - Enter your API key
 - Select the model you want to test
 - Configure test parameters:
-  - Test prompt
-  - Max tokens
-  - Temperature
-  - Number of tests
-  - Concurrent test limit
+  - Prompt type (fixed or custom)
+  - Prompt length or custom prompt text
+  - Max output tokens
+  - Temperature / Top‑P / penalties
+  - Number of rounds
+  - Base concurrent test limit
   - Timeout
 
 ### 2. Validate API
@@ -113,15 +115,20 @@ wails dev
 - **Model**: Specific model to test
 
 ### Test Parameters
-- **Test Prompt**: The prompt sent to the model
+- **Prompt Type**: Fixed synthetic prompt or custom prompt text
+- **Prompt Length**: Target token length for fixed prompts
 - **Max Tokens**: Maximum tokens in the response
 - **Temperature**: Creativity/randomness parameter (0-2)
-- **Test Count**: Number of tests to run (1-100)
-- **Concurrent Tests**: Parallel execution limit
+- **Test Count**: Number of rounds per configuration (1-100)
+- **Concurrent Tests**: Base parallel execution limit
 - **Timeout**: Request timeout in seconds (10-300)
 
 ### Advanced Settings
 - **Custom Headers**: Additional HTTP headers as JSON
+- **Test Mode**:
+  - `normal`: Single configuration with fixed concurrency and prompt length
+  - `concurrency_step`: Sweep concurrency from `start` → `end` with a given `step`
+  - `input_step`: Sweep input length from `start` → `end` with a given `step`, at fixed concurrency
 
 ## Performance Metrics
 
@@ -140,6 +147,11 @@ wails dev
 - **Per-Round Totals**: Average, minimum, and maximum for round throughput across the entire batch
 - **Table Support**: Round summaries are exported alongside request-level data when saving CSV or JSON
 
+### Step Tests
+- **Concurrency Step Tests**: For each configured concurrency level, the app runs `testCount * concurrency` requests and reports both per-request throughput and per-concurrency aggregate throughput.
+- **Input Length Step Tests**: For each configured input length, the app runs `testCount * concurrency` requests, grouping metrics by actual prompt tokens to reflect truncation.
+- **Progress & Telemetry**: Total planned requests for step tests are computed consistently on both frontend and backend, and real-time telemetry includes the current step index and total steps.
+
 ### Reliability
 - **Success Rate**: Percentage of successful requests
 - **Error Tracking**: Failed request details
@@ -148,13 +160,15 @@ wails dev
 
 ### CSV
 - Test results with individual metrics
-- Summary statistics
-- Comparison data
+- Summary statistics (latency, throughput, round throughput, prefill/output TPS)
+- Round summaries (per-round success rate, latency, and aggregate throughput)
+- Step performance tables for step tests (per concurrency/input length TTFT and throughput)
 
 ### JSON
 - Complete test data structure
 - All configuration and result details
-- Suitable for programmatic processing
+- Step performance metadata for step tests (mode, x‑axis label, aggregated points)
+- Suitable for programmatic processing and offline chart reconstruction
 
 ### PNG (Charts)
 - Visual representations of test results

@@ -183,7 +183,36 @@ export const useSpeedTestController = (): SpeedTestControllerState => {
       completedTestsRef.current.clear();
       setRealtimeResults([]);
       setTelemetryHistory([]);
-      startTest(config.testCount * config.concurrentTests);
+      // For step tests, the backend expands the configuration into
+      // one or more steps with potentially different concurrency.
+      // Mirror that logic here so that the progress bar uses the
+      // same total test count as the Go service.
+      let totalPlannedTests = config.testCount * config.concurrentTests;
+      if (config.testMode === 'concurrency_step') {
+        const { start, end, step } = config.stepConfig;
+        const safeStart = start > 0 ? start : 1;
+        const safeStep = step > 0 ? step : 1;
+        const safeEnd = end >= safeStart ? end : safeStart;
+        let sum = 0;
+        for (let c = safeStart; c <= safeEnd; c += safeStep) {
+          sum += c;
+        }
+        totalPlannedTests = config.testCount * sum;
+      } else if (config.testMode === 'input_step') {
+        const { start, end, step } = config.stepConfig;
+        const safeStart = start > 0 ? start : 1;
+        const safeStep = step > 0 ? step : 1;
+        const safeEnd = end >= safeStart ? end : safeStart;
+        let steps = 0;
+        for (let l = safeStart; l <= safeEnd; l += safeStep) {
+          steps += 1;
+        }
+        if (steps <= 0) {
+          steps = 1;
+        }
+        totalPlannedTests = config.testCount * config.concurrentTests * steps;
+      }
+      startTest(totalPlannedTests);
       const batch = await StartSpeedTest(config);
       if (batch && batch.id) {
         setRunningBatchId(batch.id);

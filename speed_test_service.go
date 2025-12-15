@@ -85,6 +85,9 @@ func (s *SpeedTestService) RunSpeedTest(ctx context.Context, config TestConfigur
 	}
 
 	// 2. Calculate Total Tests
+	// For normal mode, this is simply testCount * concurrency.
+	// For step modes, we sum over each generated step so that
+	// progress, telemetry and UI charts see the true total.
 	totalTests := 0
 	for _, step := range steps {
 		totalTests += config.TestCount * step.concurrency
@@ -119,6 +122,10 @@ func (s *SpeedTestService) RunSpeedTest(ctx context.Context, config TestConfigur
 	var ttftValues []float64 // for P95
 	var telemetryMu sync.Mutex
 	var lastGeneratedTokens int64
+
+	// Step telemetry (for step tests only)
+	stepTotal := len(steps)
+	var currentStepIndex int32
 
 	// Start telemetry ticker
 	ticker := time.NewTicker(500 * time.Millisecond)
@@ -176,6 +183,8 @@ func (s *SpeedTestService) RunSpeedTest(ctx context.Context, config TestConfigur
 					InstantTPS:      instantTPS,
 					AverageTTFT:     avgTTFT,
 					P95TTFT:         p95TTFT,
+					StepCurrent:     int(atomic.LoadInt32(&currentStepIndex)),
+					StepTotal:       stepTotal,
 				}
 
 				select {
@@ -190,6 +199,9 @@ func (s *SpeedTestService) RunSpeedTest(ctx context.Context, config TestConfigur
 	globalTestIndex := 0
 
 	for stepIndex, step := range steps {
+		// Update current step index for telemetry consumers (1-based)
+		atomic.StoreInt32(&currentStepIndex, int32(stepIndex+1))
+
 		// Check context before starting a step
 		select {
 		case <-ctx.Done():
@@ -305,18 +317,6 @@ func (s *SpeedTestService) RunSpeedTest(ctx context.Context, config TestConfigur
 		}
 		wg.Wait()
 		globalTestIndex += stepTotalTests
-
-		// Update telemetry with current step info
-		telemetryMu.Lock()
-		// We could add step info to telemetry update, but currently not in struct.
-		// Added StepCurrent/StepTotal to struct model previously.
-		// Let's just rely on frontend knowing totalTests?
-		// Or update the struct later if needed.
-		telemetryMu.Unlock()
-
-		// Hack: notify telemetry loop of step change?
-		// Not strictly needed if we just show aggregate progress.
-		_ = stepIndex // suppress unused variable warning
 	}
 
 	endTime := time.Now().Format(time.RFC3339)
